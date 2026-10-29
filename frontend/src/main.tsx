@@ -29,7 +29,7 @@ function App() {
   const [restoredTestAddress, setRestoredTestAddress] = useState<string | null>(null);
   const [restoreTestError, setRestoreTestError] = useState<string | null>(null);
   const [experimentalError, setExperimentalError] = useState<string | null>(null);
-  const [creationStage, setCreationStage] = useState<'password' | 'backup'>('password');
+  const [creationStage, setCreationStage] = useState<'password' | 'backup' | 'verify'>('password');
   const [backupConfirmed, setBackupConfirmed] = useState(false);
   const [backupWifCheck, setBackupWifCheck] = useState('');
   const [backupVerified, setBackupVerified] = useState(false);
@@ -127,7 +127,7 @@ function App() {
         <h1>Your FLOOF. Your keys. Your control.</h1>
         <p className="subtitle">First milestone: live data from a locally running FloofyChain Core node.</p>
       </section>
-      {(!vaultPresent || (experimentalWallet && creationStage === 'backup')) && <section className="panel setup-panel" id="wallet-setup">
+      {(!vaultPresent || (experimentalWallet && (creationStage === 'backup' || creationStage === 'verify'))) && <section className="panel setup-panel" id="wallet-setup">
         <p className="eyebrow">EXPERIMENTAL · LOCAL BROWSER WALLET</p>
         <h2>Create or import a wallet</h2>
         <p className="muted">Create a disposable single-key address locally in your browser. No backend receives the key. Experimental WIF restoration is available. Never fund experimental addresses.</p>
@@ -162,7 +162,7 @@ function App() {
                 }}>Generate experimental wallet</button>
                 {experimentalError && <p role="alert">{experimentalError}</p>}
                 {experimentalWallet && <div className="send-preview">
-                  <h3>{creationStage === 'password' ? 'Step 2 — Secure your wallet' : 'Step 3 — Back up your test WIF'}</h3>
+                  <h3>{creationStage === 'password' ? 'Step 2 — Secure your wallet' : creationStage === 'backup' ? 'Step 3 — Save your test WIF' : 'Step 4 — Verify your saved WIF'}</h3>
                   <p>Public address: <code>{experimentalWallet.address}</code></p>
                   {creationStage === 'password' ? <form className="send-form" autoComplete="off" onSubmit={async event => {
                     event.preventDefault(); setVaultBusy(true); setVaultNotice('');
@@ -180,26 +180,38 @@ function App() {
                     <label htmlFor="creation-confirm">Confirm password</label>
                     <input id="creation-confirm" type="password" autoComplete="new-password" value={vaultConfirm} onChange={e => setVaultConfirm(e.target.value)} />
                     <button type="submit" disabled={vaultBusy || !vaultPassword || !vaultConfirm}>{vaultBusy ? 'Encrypting…' : 'Encrypt & continue'}</button>
-                  </form> : <>
-                    <p className="setup-notice">TEST ONLY. Never fund this wallet. Your WIF is the only independent backup for this single key. Do not share it.</p>
+                  </form> : creationStage === 'backup' ? <>
+                    <p className="setup-notice">TEST ONLY. Never fund this wallet. Save your private test WIF in a safe place. You will need it to pass the next step. Never share it.</p>
                     <button type="button" onClick={() => setShowExperimentalWif(v => !v)}>{showExperimentalWif ? 'Hide test WIF' : 'Reveal test WIF'}</button>
                     {showExperimentalWif && <p>Private test WIF: <code className="send-destination">{experimentalWallet.wif}</code></p>}
-                    <p>To verify your backup, hide the WIF above and enter your saved test WIF below. Verification happens entirely in your browser.</p>
-                    <label htmlFor="backup-wif-check">Re-enter your saved test WIF</label>
-                    <input id="backup-wif-check" type="password" autoComplete="off" spellCheck={false} value={backupWifCheck} onChange={e => { setBackupWifCheck(e.target.value); setBackupVerified(false); setBackupCheckError(''); }} placeholder="Paste the test WIF from your backup" />
-                    <button type="button" disabled={!backupWifCheck.trim()} onClick={() => {
-                      try {
-                        const recovered = restoreExperimentalAddress(backupWifCheck.trim());
-                        if (recovered !== experimentalWallet.address) throw Error('mismatch');
-                        setBackupVerified(true); setBackupCheckError(''); setBackupWifCheck(''); setShowExperimentalWif(false);
-                      } catch {
-                        setBackupVerified(false); setBackupCheckError('The WIF is invalid or belongs to a different wallet. Check your backup.');
-                      }
-                    }}>Verify saved WIF</button>
-                    {backupCheckError && <p role="alert" className="setup-notice">{backupCheckError}</p>}
-                    {backupVerified && <p role="status">✓ Backup verified locally: the WIF matches your wallet address.</p>}
-                    <label><input type="checkbox" checked={backupConfirmed} onChange={e => setBackupConfirmed(e.target.checked)} /> I saved the experimental WIF backup somewhere safe</label>
-                    <button type="button" disabled={!backupConfirmed || !backupVerified} onClick={() => { setExperimentalWallet(null); setBackupWifCheck(''); setBackupVerified(false); setShowExperimentalWif(false); setVaultMode('unlock'); setVaultNotice('Test wallet setup complete. Unlock with your password.'); }}>Finish test setup</button>
+                    <div className="send-form">
+                      <label><input type="checkbox" checked={backupConfirmed} onChange={e => setBackupConfirmed(e.target.checked)} /> I saved my experimental WIF somewhere safe</label>
+                      <button type="button" disabled={!backupConfirmed} onClick={() => {
+                        setShowExperimentalWif(false);
+                        setBackupWifCheck(''); setBackupVerified(false); setBackupCheckError('');
+                        setCreationStage('verify');
+                      }}>Continue to backup verification</button>
+                    </div>
+                  </> : <>
+                    <p className="setup-notice">The private WIF is no longer shown on this step. Use the backup you saved previously to verify the same wallet address. Verification stays in your browser.</p>
+                    <div className="send-form">
+                      <label htmlFor="backup-wif-check">Enter your saved test WIF</label>
+                      <input id="backup-wif-check" type="password" autoComplete="off" spellCheck={false} value={backupWifCheck} onChange={e => { setBackupWifCheck(e.target.value); setBackupVerified(false); setBackupCheckError(''); }} placeholder="Enter the test WIF from your backup" />
+                      <button type="button" disabled={!backupWifCheck.trim()} onClick={() => {
+                        try {
+                          if (restoreExperimentalAddress(backupWifCheck.trim()) !== experimentalWallet.address) throw Error('mismatch');
+                          setBackupVerified(true); setBackupCheckError(''); setBackupWifCheck('');
+                        } catch {
+                          setBackupVerified(false); setBackupCheckError('The WIF is invalid or belongs to a different wallet. Check your backup.');
+                        }
+                      }}>Verify saved WIF</button>
+                      {backupCheckError && <p role="alert" className="setup-notice">{backupCheckError}</p>}
+                      {backupVerified && <p role="status">✓ Backup verified locally: the WIF matches your wallet address.</p>}
+                      <button type="button" disabled={!backupVerified} onClick={() => {
+                        setExperimentalWallet(null); setBackupWifCheck(''); setBackupVerified(false);
+                        setVaultMode('unlock'); setVaultNotice('Test wallet setup complete. Unlock with your password.');
+                      }}>Finish test setup</button>
+                    </div>
                   </>}
                   {vaultNotice && <p role="alert" className="setup-notice">{vaultNotice}</p>}
                 </div>}
@@ -251,7 +263,7 @@ function App() {
           </div>
         )}
       </section>}
-      {vaultPresent && !(experimentalWallet && creationStage === 'backup') && <section className="panel setup-panel" id="experimental-vault">
+      {vaultPresent && !(experimentalWallet && (creationStage === 'backup' || creationStage === 'verify')) && <section className="panel setup-panel" id="experimental-vault">
         <p className="eyebrow">EXPERIMENTAL · ENCRYPTED LOCAL STORAGE</p>
         <h2>Unlock or recover your test wallet</h2>
         <p className="setup-notice">⚠️ EMPTY TEST WALLETS ONLY. Browser storage is not a secure hardware wallet. Never use real funded keys. A forgotten password cannot be recovered; a saved WIF can be used to replace the test vault with a new password.</p>
