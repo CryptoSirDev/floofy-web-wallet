@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import ReactDOM from 'react-dom/client';
+import QRCode from 'qrcode';
 import './style.css';
 
 type WalletSummary = {
@@ -21,6 +22,10 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [transactions, setTransactions] = useState<WalletTransaction[]>([]);
   const [historyError, setHistoryError] = useState(false);
+  const [receiveAddress, setReceiveAddress] = useState<string | null>(null);
+  const [receiveError, setReceiveError] = useState<string | null>(null);
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
@@ -50,6 +55,32 @@ function App() {
   }, []);
 
   useEffect(() => { void refresh(); }, [refresh]);
+
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const response = await fetch(API + '/api/wallet/receive', { cache: 'no-store' });
+        if (!response.ok) throw new Error('Invalid receive address');
+        const data = await response.json();
+        if (!active) return;
+        if (data.source !== 'local-node-wallet' || !data.configured) {
+          setReceiveError('Configure RECEIVE_ADDRESS in backend/.env with an existing address from this Core wallet.');
+          return;
+        }
+        if (typeof data.address !== 'string' || !data.address) throw new Error('Invalid address');
+        const qr = await QRCode.toDataURL(data.address, { errorCorrectionLevel: 'M', margin: 2, width: 240 });
+        if (active) { setReceiveAddress(data.address); setQrDataUrl(qr); setReceiveError(null); }
+      } catch { if (active) setReceiveError('Receive is unavailable. Check RECEIVE_ADDRESS and restart the local backend.'); }
+    })();
+    return () => { active = false; };
+  }, []);
+
+  const copyAddress = async () => {
+    if (!receiveAddress) return;
+    try { await navigator.clipboard.writeText(receiveAddress); setCopied(true); }
+    catch { setCopied(false); setReceiveError('Copy failed. Select and copy the address manually.'); }
+  };
 
   return (
     <main className="shell">
@@ -81,9 +112,18 @@ function App() {
         </article>
         <article className="panel">
           <h2>Wallet actions</h2>
-          <div className="actions"><button disabled>Send</button><button disabled>Receive</button><button onClick={() => document.getElementById('history')?.scrollIntoView({ behavior: 'smooth' })}>History</button></div>
+          <div className="actions"><button disabled>Send</button><button onClick={() => document.getElementById('receive')?.scrollIntoView({ behavior: 'smooth' })}>Receive</button><button onClick={() => document.getElementById('history')?.scrollIntoView({ behavior: 'smooth' })}>History</button></div>
           <p className="muted">No keys, signing or transaction creation are implemented.</p>
         </article>
+      </section>
+      <section className="panel next" id="receive">
+        <h2>Receive FLOOF <span className="muted">· Connected Core wallet</span></h2>
+        <p className="muted">Existing address verified against the connected Core wallet. No new keys are generated.</p>
+        {receiveError && <p role="status" className="muted">{receiveError}</p>}
+        {receiveAddress && <div className="receive-box">
+          {qrDataUrl && <img src={qrDataUrl} alt="QR code for the displayed FLOOF receiving address" width={240} height={240} className="receive-qr" />}
+          <div className="receive-details"><p className="muted">Your FLOOF receiving address</p><code className="receive-address">{receiveAddress}</code><p><button onClick={() => void copyAddress()}>{copied ? '✓ Copied!' : 'Copy address'}</button></p><p className="muted">Verify the full address in FloofyChain Core before sharing or using this QR code.</p></div>
+        </div>}
       </section>
       <section className="panel next" id="history">
         <h2>Recent transactions <span className="muted">· Connected Core wallet</span></h2>
