@@ -81,7 +81,7 @@ const server = http.createServer(async (req, res) => {
     res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
     res.writeHead(204); res.end(); return;
   }
-  if (req.method !== 'GET' || !['/api/health', '/api/wallet/summary'].includes(req.url)) {
+  if (req.method !== 'GET' || !['/api/health', '/api/wallet/summary', '/api/wallet/transactions'].includes(req.url)) {
     res.writeHead(404); res.end(JSON.stringify({ error: 'Not found' })); return;
   }
   try {
@@ -91,7 +91,21 @@ const server = http.createServer(async (req, res) => {
       res.end(JSON.stringify({ ok: true, chain: chain.chain, blocks: chain.blocks, initialblockdownload: chain.initialblockdownload }));
       return;
     }
-    // This is the faucet node's *local wallet* balance, not an arbitrary address balance.
+    if (req.url === '/api/wallet/transactions') {
+      const raw = await rpc('listtransactions', ['*', 10, 0]);
+      const transactions = raw.map(tx => ({
+        txid: typeof tx.txid === 'string' ? tx.txid : '',
+        category: tx.category === 'send' ? 'send' : tx.category === 'receive' ? 'receive' : 'other',
+        amount: typeof tx.amount === 'number' ? tx.amount : 0,
+        confirmations: typeof tx.confirmations === 'number' ? tx.confirmations : 0,
+        time: typeof tx.time === 'number' ? tx.time : null,
+        address: typeof tx.address === 'string' ? tx.address : null,
+      }));
+      res.writeHead(200);
+      res.end(JSON.stringify({ source: 'local-node-wallet', transactions }));
+      return;
+    }
+    // This is the connected Core node's *local wallet* balance, not an arbitrary address balance.
     const [balance, unconfirmed, chain] = await Promise.all([
       rpc('getbalance'), rpc('getunconfirmedbalance'), rpc('getblockchaininfo'),
     ]);
