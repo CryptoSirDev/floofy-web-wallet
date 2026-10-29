@@ -263,7 +263,7 @@ function App() {
           </div>
         )}
       </section>}
-      {vaultPresent && !(experimentalWallet && (creationStage === 'backup' || creationStage === 'verify')) && <section className="panel setup-panel" id="experimental-vault">
+      {vaultPresent && !vaultUnlocked && !(experimentalWallet && (creationStage === 'backup' || creationStage === 'verify')) && <section className="panel setup-panel" id="experimental-vault">
         <p className="eyebrow">EXPERIMENTAL · ENCRYPTED LOCAL STORAGE</p>
         <h2>Unlock or recover your test wallet</h2>
         <p className="setup-notice">⚠️ EMPTY TEST WALLETS ONLY. Browser storage is not a secure hardware wallet. Never use real funded keys. A forgotten password cannot be recovered; a saved WIF can be used to replace the test vault with a new password.</p>
@@ -309,6 +309,18 @@ function App() {
         {vaultPresent && <button type="button" onClick={() => { if (window.confirm('WARNING: This permanently deletes the encrypted TEST vault from this browser. If you do not have the correct WIF backup, you may permanently lose access to this wallet and any funds associated with it. This action cannot be undone. Are you absolutely sure?')) { clearTestVault(); setVaultPresent(false); setVaultAddress(null); setVaultUnlocked(false); setVaultNotice(''); setVaultMode('unlock'); setVaultPassword(''); setVaultConfirm(''); setVaultWif(''); setWalletSetupView('home'); } }}>Delete encrypted test vault</button>}
       </section>}
 
+      {vaultPresent && vaultUnlocked && <section className="panel browser-dashboard" id="browser-dashboard">
+        <div className="dashboard-header">
+          <div><p className="eyebrow">FLOOFYCHAIN · EXPERIMENTAL BROWSER WALLET</p><h2>My Wallet</h2><p className="muted">Unlocked test wallet · Single key</p></div>
+          <button type="button" onClick={() => { setVaultUnlocked(false); setVaultMode('unlock'); setVaultNotice('Wallet locked. Enter your password to unlock again.'); setVaultPassword(''); }}>Lock Wallet</button>
+        </div>
+        <div className="dashboard-balance"><p className="muted">Browser wallet balance</p><h2>— FLOOF</h2><p>Unavailable · Address-based chain indexing not implemented</p><p className="muted">Never confused with the connected Core wallet balance.</p></div>
+        <div className="dashboard-address"><p className="muted">Experimental public address</p><code className="receive-address">{vaultAddress ?? 'Unavailable'}</code><button type="button" disabled={!vaultAddress} onClick={() => { if (vaultAddress) void navigator.clipboard.writeText(vaultAddress); }}>Copy public address</button></div>
+        <div className="dashboard-actions"><div><strong>↑ Send</strong><span>Disabled · No signing</span></div><div><strong>↓ Receive</strong><span>Test only · Do not fund</span></div><div><strong>◷ History</strong><span>Unavailable · Indexer pending</span></div></div>
+        <div className="dashboard-history"><h3>Browser wallet transactions</h3><p className="muted">No address-based transaction history is available. Core history below belongs to a different wallet.</p></div>
+        <p className="setup-notice">TEST ONLY. Never send real FLOOF to experimental addresses. No signing or spending is implemented.</p>
+      </section>}
+      <section className="panel core-separator"><p className="eyebrow">DEVELOPER AREA · SEPARATE WALLET</p><h2>Connected FloofyChain Core · Read only</h2><p className="muted">All balances, addresses and transactions below come from the connected local Core wallet, NOT the browser wallet.</p></section>
       <section className="grid">
         <article className="panel balance">
           <p className="muted">Connected node wallet balance (not a browser wallet)</p>
