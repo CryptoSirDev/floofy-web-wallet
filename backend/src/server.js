@@ -113,7 +113,7 @@ const server = http.createServer(async (req, res) => {
         confirmations: typeof tx.confirmations === 'number' ? tx.confirmations : 0,
         time: typeof tx.time === 'number' ? tx.time : null,
         address: typeof tx.address === 'string' ? tx.address : null,
-      }));
+      })).reverse(); // Core listtransactions returns oldest-to-newest; display newest first.
       res.writeHead(200);
       res.end(JSON.stringify({ source: 'local-node-wallet', transactions }));
       return;
