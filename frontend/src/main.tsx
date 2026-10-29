@@ -29,6 +29,8 @@ function App() {
   const [restoredTestAddress, setRestoredTestAddress] = useState<string | null>(null);
   const [restoreTestError, setRestoreTestError] = useState<string | null>(null);
   const [experimentalError, setExperimentalError] = useState<string | null>(null);
+  const [creationStage, setCreationStage] = useState<'password' | 'backup'>('password');
+  const [backupConfirmed, setBackupConfirmed] = useState(false);
   const [vaultPresent, setVaultPresent] = useState(() => hasTestVault());
   const [vaultAddress, setVaultAddress] = useState<string | null>(() => { try { return testVaultAddress(); } catch { return null; } });
   const [vaultPassword, setVaultPassword] = useState('');
@@ -122,51 +124,6 @@ function App() {
         <h1>Your FLOOF. Your keys. Your control.</h1>
         <p className="subtitle">First milestone: live data from a locally running FloofyChain Core node.</p>
       </section>
-      <section className="panel setup-panel" id="experimental-vault">
-        <p className="eyebrow">EXPERIMENTAL · ENCRYPTED LOCAL STORAGE</p>
-        <h2>Password-protected test wallet</h2>
-        <p className="setup-notice">⚠️ EMPTY TEST WALLETS ONLY. Browser storage is not a secure hardware wallet. Never use real funded keys. A forgotten password cannot be recovered; a saved WIF can be used to replace the test vault with a new password.</p>
-        <p>Saved test wallet: {vaultPresent ? <strong>{vaultAddress ?? 'Saved vault (metadata unavailable)'}</strong> : 'None'}</p>
-        <div className="actions">
-          <button type="button" onClick={() => { setVaultMode('save'); setVaultNotice(''); setVaultUnlocked(false); }}>Encrypt &amp; save</button>
-          <button type="button" onClick={() => { setVaultMode('unlock'); setVaultNotice(''); setVaultUnlocked(false); }}>Unlock</button>
-          <button type="button" onClick={() => { setVaultMode('recover'); setVaultNotice(''); setVaultUnlocked(false); }}>Forgot password? Restore with WIF</button>
-        </div>
-        <form className="send-form" autoComplete="off" onSubmit={async event => {
-          event.preventDefault();
-          setVaultBusy(true); setVaultNotice(''); setVaultUnlocked(false);
-          try {
-            if (vaultMode === 'unlock') {
-              const address = await unlockTestVault(vaultPassword);
-              setVaultAddress(address); setVaultUnlocked(true);
-              setVaultNotice('PASS: encrypted test wallet unlocked. Address verified offline.');
-            } else {
-              if (vaultPassword !== vaultConfirm) throw Error('Passwords do not match');
-              if (vaultPassword.length < 12) throw Error('Use at least 12 characters');
-              if (vaultMode === 'save' && vaultPresent) throw Error('A vault exists. Use WIF recovery to replace it.');
-              const sourceWif = vaultMode === 'save' && experimentalWallet ? experimentalWallet.wif : vaultWif.trim();
-              if (!sourceWif) throw Error('Create a test wallet or enter its test WIF first');
-              const address = await saveTestVault(sourceWif, vaultPassword, vaultMode === 'recover');
-              setVaultAddress(address); setVaultPresent(true);
-              setVaultNotice(vaultMode === 'recover' ? 'PASS: test wallet restored from WIF and encrypted with NEW password.' : 'PASS: test wallet encrypted and saved in this browser.');
-            }
-          } catch (err) {
-            setVaultNotice('Error: ' + (err instanceof Error && ['Passwords do not match','Use at least 12 characters','A vault exists. Use WIF recovery to replace it.','Create a test wallet or enter its test WIF first'].includes(err.message) ? err.message : 'Invalid password, WIF or saved test wallet.'));
-          } finally {
-            setVaultPassword(''); setVaultConfirm(''); setVaultWif(''); setVaultBusy(false);
-          }
-        }}>
-          {vaultMode !== 'unlock' && <><label htmlFor="vault-wif">Test WIF {vaultMode === 'save' && experimentalWallet ? '(uses the newly generated test wallet above)' : '(experimental only)'}</label>
-            {!(vaultMode === 'save' && experimentalWallet) && <input id="vault-wif" type="password" autoComplete="off" spellCheck={false} value={vaultWif} onChange={e => setVaultWif(e.target.value)} placeholder="Test-only WIF — never a funded wallet" />}</>}
-          <label htmlFor="vault-password">{vaultMode === 'unlock' ? 'Password' : 'New password (12+ characters)'}</label>
-          <input id="vault-password" type="password" autoComplete="new-password" value={vaultPassword} onChange={e => setVaultPassword(e.target.value)} />
-          {vaultMode !== 'unlock' && <><label htmlFor="vault-confirm">Confirm new password</label><input id="vault-confirm" type="password" autoComplete="new-password" value={vaultConfirm} onChange={e => setVaultConfirm(e.target.value)} /></>}
-          <button type="submit" disabled={vaultBusy || !vaultPassword || (vaultMode !== 'unlock' && !vaultConfirm)}>{vaultBusy ? 'Working…' : vaultMode === 'unlock' ? 'Unlock test wallet' : vaultMode === 'recover' ? 'Recover and set new password' : 'Encrypt & save test wallet'}</button>
-        </form>
-        {vaultNotice && <p role="status" className="setup-notice">{vaultNotice}</p>}
-        {vaultUnlocked && <p>Unlocked address: <code>{vaultAddress}</code> — no signing or funds access enabled.</p>}
-        {vaultPresent && <button type="button" onClick={() => { if (window.confirm('Delete the saved encrypted TEST vault from this browser? This cannot be undone.')) { clearTestVault(); setVaultPresent(false); setVaultAddress(null); setVaultUnlocked(false); setVaultNotice('Encrypted test vault deleted from browser storage.'); } }}>Delete encrypted test vault</button>}
-      </section>
       <section className="panel setup-panel" id="wallet-setup">
         <p className="eyebrow">EXPERIMENTAL · LOCAL BROWSER WALLET</p>
         <h2>Create or import a wallet</h2>
@@ -190,23 +147,44 @@ function App() {
                 <p className="setup-notice">⚠️ TEST ONLY. Not audited. No encryption, no permanent storage, no HD recovery and no signing. Do not send FLOOF to this address. Closing or refreshing this tab loses the key unless you manually save the WIF; do not use it as a real wallet backup.</p>
                 <button type="button" onClick={() => {
                   try {
+                    if (vaultPresent) throw Error('Vault already exists');
                     setExperimentalWallet(createEphemeralWallet());
+                    setCreationStage('password'); setBackupConfirmed(false);
                     setShowExperimentalWif(false);
                     setExperimentalError(null);
                   } catch {
                     setExperimentalWallet(null);
-                    setExperimentalError('Could not create a test wallet. Check browser crypto support.');
+                    setExperimentalError('Could not create test wallet. Check browser support or delete existing test vault first.');
                   }
                 }}>Generate experimental wallet</button>
                 {experimentalError && <p role="alert">{experimentalError}</p>}
-                {experimentalWallet && <div className="send-preview" role="status">
-                  <h3>Experimental wallet created — NOT FOR FUNDS</h3>
-                  <p><strong>Public address:</strong> <code className="send-destination">{experimentalWallet.address}</code></p>
-                  <p className="muted">The WIF is secret. Never send it in chat, screenshots or GitHub.</p>
-                  <button type="button" onClick={() => setShowExperimentalWif(value => !value)}>{showExperimentalWif ? 'Hide private WIF' : 'Reveal private WIF (local screen only)'}</button>
-                  {showExperimentalWif && <p><strong>Private WIF:</strong> <code className="send-destination">{experimentalWallet.wif}</code></p>}
-                  <p className="setup-notice">This address is unrelated to the balance shown below, which belongs to your connected Core wallet. No FLOOF was moved.</p>
-                  <button type="button" onClick={() => { setExperimentalWallet(null); setShowExperimentalWif(false); }}>Discard test wallet from screen</button>
+                {experimentalWallet && <div className="send-preview">
+                  <h3>{creationStage === 'password' ? 'Step 2 — Secure your wallet' : 'Step 3 — Back up your test WIF'}</h3>
+                  <p>Public address: <code>{experimentalWallet.address}</code></p>
+                  {creationStage === 'password' ? <form className="send-form" autoComplete="off" onSubmit={async event => {
+                    event.preventDefault(); setVaultBusy(true); setVaultNotice('');
+                    try {
+                      if (vaultPassword.length < 12 || vaultPassword !== vaultConfirm) throw Error('Invalid password');
+                      await saveTestVault(experimentalWallet.wif, vaultPassword);
+                      setVaultPresent(true); setVaultAddress(experimentalWallet.address);
+                      setCreationStage('backup');
+                    } catch { setVaultNotice('Could not save. Passwords must match (12+ characters), and no previous test vault may exist.'); }
+                    finally { setVaultPassword(''); setVaultConfirm(''); setVaultBusy(false); }
+                  }}>
+                    <p>Choose a password to encrypt your empty experimental wallet in this browser.</p>
+                    <label htmlFor="creation-password">Password (12+ characters)</label>
+                    <input id="creation-password" type="password" autoComplete="new-password" value={vaultPassword} onChange={e => setVaultPassword(e.target.value)} />
+                    <label htmlFor="creation-confirm">Confirm password</label>
+                    <input id="creation-confirm" type="password" autoComplete="new-password" value={vaultConfirm} onChange={e => setVaultConfirm(e.target.value)} />
+                    <button type="submit" disabled={vaultBusy || !vaultPassword || !vaultConfirm}>{vaultBusy ? 'Encrypting…' : 'Encrypt & continue'}</button>
+                  </form> : <>
+                    <p className="setup-notice">TEST ONLY. Never fund this wallet. Your WIF is the only independent backup for this single key. Do not share it.</p>
+                    <button type="button" onClick={() => setShowExperimentalWif(v => !v)}>{showExperimentalWif ? 'Hide test WIF' : 'Reveal test WIF'}</button>
+                    {showExperimentalWif && <p>Private test WIF: <code className="send-destination">{experimentalWallet.wif}</code></p>}
+                    <label><input type="checkbox" checked={backupConfirmed} onChange={e => setBackupConfirmed(e.target.checked)} /> I saved the experimental WIF backup</label>
+                    <button type="button" disabled={!backupConfirmed} onClick={() => { setExperimentalWallet(null); setShowExperimentalWif(false); setVaultMode('unlock'); setVaultNotice('Test wallet setup complete. Unlock it below.'); }}>Finish test setup</button>
+                  </>}
+                  {vaultNotice && <p role="alert" className="setup-notice">{vaultNotice}</p>}
                 </div>}
               </>
             ) : (
@@ -256,6 +234,52 @@ function App() {
           </div>
         )}
       </section>
+      <section className="panel setup-panel" id="experimental-vault">
+        <p className="eyebrow">EXPERIMENTAL · ENCRYPTED LOCAL STORAGE</p>
+        <h2>Password-protected test wallet</h2>
+        <p className="setup-notice">⚠️ EMPTY TEST WALLETS ONLY. Browser storage is not a secure hardware wallet. Never use real funded keys. A forgotten password cannot be recovered; a saved WIF can be used to replace the test vault with a new password.</p>
+        <p>Saved test wallet: {vaultPresent ? <strong>{vaultAddress ?? 'Saved vault (metadata unavailable)'}</strong> : 'None'}</p>
+        <div className="actions">
+          <button type="button" onClick={() => { setVaultMode('save'); setVaultNotice(''); setVaultUnlocked(false); }}>Encrypt &amp; save</button>
+          <button type="button" onClick={() => { setVaultMode('unlock'); setVaultNotice(''); setVaultUnlocked(false); }}>Unlock</button>
+          <button type="button" onClick={() => { setVaultMode('recover'); setVaultNotice(''); setVaultUnlocked(false); }}>Forgot password? Restore with WIF</button>
+        </div>
+        <form className="send-form" autoComplete="off" onSubmit={async event => {
+          event.preventDefault();
+          setVaultBusy(true); setVaultNotice(''); setVaultUnlocked(false);
+          try {
+            if (vaultMode === 'unlock') {
+              const address = await unlockTestVault(vaultPassword);
+              setVaultAddress(address); setVaultUnlocked(true);
+              setVaultNotice('PASS: encrypted test wallet unlocked. Address verified offline.');
+            } else {
+              if (vaultPassword !== vaultConfirm) throw Error('Passwords do not match');
+              if (vaultPassword.length < 12) throw Error('Use at least 12 characters');
+              if (vaultMode === 'save' && vaultPresent) throw Error('A vault exists. Use WIF recovery to replace it.');
+              const sourceWif = vaultMode === 'save' && experimentalWallet ? experimentalWallet.wif : vaultWif.trim();
+              if (!sourceWif) throw Error('Create a test wallet or enter its test WIF first');
+              const address = await saveTestVault(sourceWif, vaultPassword, vaultMode === 'recover');
+              setVaultAddress(address); setVaultPresent(true);
+              setVaultNotice(vaultMode === 'recover' ? 'PASS: test wallet restored from WIF and encrypted with NEW password.' : 'PASS: test wallet encrypted and saved in this browser.');
+            }
+          } catch (err) {
+            setVaultNotice('Error: ' + (err instanceof Error && ['Passwords do not match','Use at least 12 characters','A vault exists. Use WIF recovery to replace it.','Create a test wallet or enter its test WIF first'].includes(err.message) ? err.message : 'Invalid password, WIF or saved test wallet.'));
+          } finally {
+            setVaultPassword(''); setVaultConfirm(''); setVaultWif(''); setVaultBusy(false);
+          }
+        }}>
+          {vaultMode !== 'unlock' && <><label htmlFor="vault-wif">Test WIF {vaultMode === 'save' && experimentalWallet ? '(uses the newly generated test wallet above)' : '(experimental only)'}</label>
+            {!(vaultMode === 'save' && experimentalWallet) && <input id="vault-wif" type="password" autoComplete="off" spellCheck={false} value={vaultWif} onChange={e => setVaultWif(e.target.value)} placeholder="Test-only WIF — never a funded wallet" />}</>}
+          <label htmlFor="vault-password">{vaultMode === 'unlock' ? 'Password' : 'New password (12+ characters)'}</label>
+          <input id="vault-password" type="password" autoComplete="new-password" value={vaultPassword} onChange={e => setVaultPassword(e.target.value)} />
+          {vaultMode !== 'unlock' && <><label htmlFor="vault-confirm">Confirm new password</label><input id="vault-confirm" type="password" autoComplete="new-password" value={vaultConfirm} onChange={e => setVaultConfirm(e.target.value)} /></>}
+          <button type="submit" disabled={vaultBusy || !vaultPassword || (vaultMode !== 'unlock' && !vaultConfirm)}>{vaultBusy ? 'Working…' : vaultMode === 'unlock' ? 'Unlock test wallet' : vaultMode === 'recover' ? 'Recover and set new password' : 'Encrypt & save test wallet'}</button>
+        </form>
+        {vaultNotice && <p role="status" className="setup-notice">{vaultNotice}</p>}
+        {vaultUnlocked && <p>Unlocked address: <code>{vaultAddress}</code> — no signing or funds access enabled.</p>}
+        {vaultPresent && <button type="button" onClick={() => { if (window.confirm('Delete the saved encrypted TEST vault from this browser? This cannot be undone.')) { clearTestVault(); setVaultPresent(false); setVaultAddress(null); setVaultUnlocked(false); setVaultNotice('Encrypted test vault deleted from browser storage.'); } }}>Delete encrypted test vault</button>}
+      </section>
+
       <section className="grid">
         <article className="panel balance">
           <p className="muted">Connected node wallet balance (not a browser wallet)</p>
