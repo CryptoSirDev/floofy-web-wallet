@@ -32,3 +32,30 @@ The existing localhost RPC backend is **read-only** and exposes a *Core wallet* 
 
 ## Exit criteria for wallet-generation implementation
 Documented parameters, verified test vectors, successful disposable Core round-trip, and security review. Until then, Create/Import remain interface previews.
+
+
+## Official source inspection — 2026-10-29
+
+Source: https://github.com/andyd1986/floofychain (main)
+
+Mainnet `src/chainparams.cpp` defines:
+- P2PKH Base58 version: decimal **35** (0x23)
+- P2SH Base58 version: decimal **22** (0x16)
+- WIF/SECRET_KEY Base58 version: decimal **163** (0xA3)
+- Extended public-key version: **02 FA CA FD**
+- Extended private-key version: **02 FA C3 98**
+
+Testnet in the source currently defines P2PKH=35, P2SH=196, WIF=163; regtest uses P2PKH=111, P2SH=196, WIF=239. **Do not mix networks**.
+
+The source uses Bitcoin-style `CBitcoinAddress`, `CBitcoinSecret`, Base58Check and `CKey` structures (`src/base58.h`, `src/key.h`). This supports interoperability research, but does not replace independent test vectors.
+
+`src/wallet/wallet.cpp` in `CWallet::DeriveNewChildKey` has an important discrepancy:
+- The implementation derives hardened path **m/0'/0'/k'** (external chain and hardened child index).
+- The metadata string records **m/0'/3'/k'**, which does **not** match the executed derivation. Treat metadata derivation paths as potentially unreliable until confirmed by Andyd or fixed in Core.
+
+### Before enabling creation/import
+- Confirm the Core version running locally matches this source revision.
+- Cross-check generated address and WIF with a brand-new disposable wallet and known deterministic test vectors.
+- Obtain an explicit resolution of the HD keypath discrepancy.
+- Confirm Core's private-key import support and verify compressed-key behavior.
+- Never use private keys from the user's real Core wallet as test vectors; never disclose them in chat or GitHub.
