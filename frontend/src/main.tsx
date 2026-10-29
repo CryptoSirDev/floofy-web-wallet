@@ -31,6 +31,9 @@ function App() {
   const [experimentalError, setExperimentalError] = useState<string | null>(null);
   const [creationStage, setCreationStage] = useState<'password' | 'backup'>('password');
   const [backupConfirmed, setBackupConfirmed] = useState(false);
+  const [backupWifCheck, setBackupWifCheck] = useState('');
+  const [backupVerified, setBackupVerified] = useState(false);
+  const [backupCheckError, setBackupCheckError] = useState('');
   const [vaultPresent, setVaultPresent] = useState(() => hasTestVault());
   const [vaultAddress, setVaultAddress] = useState<string | null>(() => { try { return testVaultAddress(); } catch { return null; } });
   const [vaultPassword, setVaultPassword] = useState('');
@@ -149,7 +152,7 @@ function App() {
                   try {
                     if (vaultPresent) throw Error('Vault already exists');
                     setExperimentalWallet(createEphemeralWallet());
-                    setCreationStage('password'); setBackupConfirmed(false);
+                    setCreationStage('password'); setBackupConfirmed(false); setBackupWifCheck(''); setBackupVerified(false); setBackupCheckError('');
                     setShowExperimentalWif(false);
                     setExperimentalError(null);
                   } catch {
@@ -181,8 +184,22 @@ function App() {
                     <p className="setup-notice">TEST ONLY. Never fund this wallet. Your WIF is the only independent backup for this single key. Do not share it.</p>
                     <button type="button" onClick={() => setShowExperimentalWif(v => !v)}>{showExperimentalWif ? 'Hide test WIF' : 'Reveal test WIF'}</button>
                     {showExperimentalWif && <p>Private test WIF: <code className="send-destination">{experimentalWallet.wif}</code></p>}
-                    <label><input type="checkbox" checked={backupConfirmed} onChange={e => setBackupConfirmed(e.target.checked)} /> I saved the experimental WIF backup</label>
-                    <button type="button" disabled={!backupConfirmed} onClick={() => { setExperimentalWallet(null); setShowExperimentalWif(false); setVaultMode('unlock'); setVaultNotice('Test wallet setup complete. Unlock with your password.'); }}>Finish test setup</button>
+                    <p>To verify your backup, hide the WIF above and enter your saved test WIF below. Verification happens entirely in your browser.</p>
+                    <label htmlFor="backup-wif-check">Re-enter your saved test WIF</label>
+                    <input id="backup-wif-check" type="password" autoComplete="off" spellCheck={false} value={backupWifCheck} onChange={e => { setBackupWifCheck(e.target.value); setBackupVerified(false); setBackupCheckError(''); }} placeholder="Paste the test WIF from your backup" />
+                    <button type="button" disabled={!backupWifCheck.trim()} onClick={() => {
+                      try {
+                        const recovered = restoreExperimentalAddress(backupWifCheck.trim());
+                        if (recovered !== experimentalWallet.address) throw Error('mismatch');
+                        setBackupVerified(true); setBackupCheckError(''); setBackupWifCheck(''); setShowExperimentalWif(false);
+                      } catch {
+                        setBackupVerified(false); setBackupCheckError('The WIF is invalid or belongs to a different wallet. Check your backup.');
+                      }
+                    }}>Verify saved WIF</button>
+                    {backupCheckError && <p role="alert" className="setup-notice">{backupCheckError}</p>}
+                    {backupVerified && <p role="status">✓ Backup verified locally: the WIF matches your wallet address.</p>}
+                    <label><input type="checkbox" checked={backupConfirmed} onChange={e => setBackupConfirmed(e.target.checked)} /> I saved the experimental WIF backup somewhere safe</label>
+                    <button type="button" disabled={!backupConfirmed || !backupVerified} onClick={() => { setExperimentalWallet(null); setBackupWifCheck(''); setBackupVerified(false); setShowExperimentalWif(false); setVaultMode('unlock'); setVaultNotice('Test wallet setup complete. Unlock with your password.'); }}>Finish test setup</button>
                   </>}
                   {vaultNotice && <p role="alert" className="setup-notice">{vaultNotice}</p>}
                 </div>}
