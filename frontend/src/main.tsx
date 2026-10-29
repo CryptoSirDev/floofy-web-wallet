@@ -22,6 +22,9 @@ function App() {
   const [walletSetupView, setWalletSetupView] = useState<'home' | 'create' | 'import'>('home');
   const [importMethod, setImportMethod] = useState<'wif' | 'bip39'>('wif');
   const [loading, setLoading] = useState(false);
+  const [sendAddress, setSendAddress] = useState('');
+  const [sendAmount, setSendAmount] = useState('');
+  const [sendPreview, setSendPreview] = useState(false);
   const [transactions, setTransactions] = useState<WalletTransaction[]>([]);
   const [historyError, setHistoryError] = useState(false);
   const [receiveAddress, setReceiveAddress] = useState<string | null>(null);
@@ -77,6 +80,9 @@ function App() {
     })();
     return () => { active = false; };
   }, []);
+
+  const sendAmountValid = /^(?:0|[1-9]\\d*)(?:\\.\\d{1,8})?$/.test(sendAmount) && Number(sendAmount) > 0 && Number.isFinite(Number(sendAmount));
+  const sendAddressPresent = sendAddress.trim().length > 0;
 
   const copyAddress = async () => {
     if (!receiveAddress) return;
@@ -152,9 +158,30 @@ function App() {
         </article>
         <article className="panel">
           <h2>Wallet actions</h2>
-          <div className="actions"><button disabled>Send</button><button onClick={() => document.getElementById('receive')?.scrollIntoView({ behavior: 'smooth' })}>Receive</button><button onClick={() => document.getElementById('history')?.scrollIntoView({ behavior: 'smooth' })}>History</button></div>
+          <div className="actions"><button onClick={() => document.getElementById('send')?.scrollIntoView({ behavior: 'smooth' })}>Send</button><button onClick={() => document.getElementById('receive')?.scrollIntoView({ behavior: 'smooth' })}>Receive</button><button onClick={() => document.getElementById('history')?.scrollIntoView({ behavior: 'smooth' })}>History</button></div>
           <p className="muted">No keys, signing or transaction creation are implemented.</p>
         </article>
+      </section>
+      <section className="panel next" id="send">
+        <p className="eyebrow">INTERFACE PREVIEW · NO TRANSACTIONS</p>
+        <h2>Send FLOOF <span className="muted">· Simulation only</span></h2>
+        <p className="muted">Plan a transfer without signing, broadcasting, or moving funds. Address validation and network fees are not implemented.</p>
+        <form className="send-form" onSubmit={event => { event.preventDefault(); if (sendAddressPresent && sendAmountValid) setSendPreview(true); }}>
+          <label htmlFor="send-address">Recipient FLOOF address (public address only)</label>
+          <input id="send-address" type="text" value={sendAddress} maxLength={120} placeholder="Paste a public address for a UI preview" autoComplete="off" spellCheck={false} onChange={event => { setSendAddress(event.target.value); setSendPreview(false); }} />
+          <label htmlFor="send-amount">Amount (FLOOF)</label>
+          <input id="send-amount" type="text" inputMode="decimal" value={sendAmount} placeholder="e.g. 10.5" onChange={event => { setSendAmount(event.target.value); setSendPreview(false); }} />
+          <p className="muted">Use a dot for decimals. Up to 8 decimal places. No address or balance checks are performed.</p>
+          <button type="submit" disabled={!sendAddressPresent || !sendAmountValid}>Preview transfer</button>
+        </form>
+        {sendPreview && <div className="send-preview" role="status">
+          <h3>Transfer preview — NOT SENT</h3>
+          <p><strong>Recipient:</strong> <code className="send-destination">{sendAddress.trim()}</code></p>
+          <p><strong>Amount:</strong> {sendAmount} FLOOF</p>
+          <p><strong>Network fee:</strong> Unknown — not estimated</p>
+          <p className="setup-notice">This is only a visual preview. The destination has NOT been validated, no transaction was created, and no FLOOF was sent.</p>
+          <button onClick={() => setSendPreview(false)}>Edit details</button>
+        </div>}
       </section>
       <section className="panel next" id="receive">
         <h2>Receive FLOOF <span className="muted">· Connected Core wallet</span></h2>
