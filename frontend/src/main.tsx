@@ -36,7 +36,7 @@ function App() {
   const [vaultPassword, setVaultPassword] = useState('');
   const [vaultConfirm, setVaultConfirm] = useState('');
   const [vaultWif, setVaultWif] = useState('');
-  const [vaultMode, setVaultMode] = useState<'save' | 'unlock' | 'recover'>('save');
+  const [vaultMode, setVaultMode] = useState<'save' | 'unlock' | 'recover'>('unlock');
   const [vaultUnlocked, setVaultUnlocked] = useState(false);
   const [vaultBusy, setVaultBusy] = useState(false);
   const [vaultNotice, setVaultNotice] = useState('');
@@ -236,11 +236,11 @@ function App() {
       </section>
       <section className="panel setup-panel" id="experimental-vault">
         <p className="eyebrow">EXPERIMENTAL · ENCRYPTED LOCAL STORAGE</p>
-        <h2>Password-protected test wallet</h2>
+        <h2>Unlock or recover your test wallet</h2>
         <p className="setup-notice">⚠️ EMPTY TEST WALLETS ONLY. Browser storage is not a secure hardware wallet. Never use real funded keys. A forgotten password cannot be recovered; a saved WIF can be used to replace the test vault with a new password.</p>
         <p>Saved test wallet: {vaultPresent ? <strong>{vaultAddress ?? 'Saved vault (metadata unavailable)'}</strong> : 'None'}</p>
         <div className="actions">
-          <button type="button" onClick={() => { setVaultMode('save'); setVaultNotice(''); setVaultUnlocked(false); }}>Encrypt &amp; save</button>
+
           <button type="button" onClick={() => { setVaultMode('unlock'); setVaultNotice(''); setVaultUnlocked(false); }}>Unlock</button>
           <button type="button" onClick={() => { setVaultMode('recover'); setVaultNotice(''); setVaultUnlocked(false); }}>Forgot password? Restore with WIF</button>
         </div>
