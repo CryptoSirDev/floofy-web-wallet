@@ -32,3 +32,35 @@ export function createEphemeralWallet() {
     privateKey.fill(0);
   }
 }
+
+function decode58(text: string): Uint8Array {
+  if (!text || text.length > 128) throw new Error('Invalid WIF length');
+  let n = 0n;
+  for (const char of text) {
+    const digit = alphabet.indexOf(char);
+    if (digit < 0) throw new Error('Invalid Base58 character');
+    n = n * 58n + BigInt(digit);
+  }
+  let hex = n.toString(16);
+  if (hex.length % 2) hex = '0' + hex;
+  const bytes = n === 0n ? new Uint8Array() : new Uint8Array(hex.match(/.{2}/g)!.map(byte => parseInt(byte, 16)));
+  const zeros = (text.match(/^1*/)?.[0] ?? '').length;
+  return concat(new Uint8Array(zeros), bytes);
+}
+export function restoreExperimentalAddress(wif: string): string {
+  const raw = decode58(wif);
+  if (raw.length !== 38) throw new Error('Invalid compressed WIF length');
+  const body = raw.slice(0, -4);
+  const expected = sha256(sha256(body)).slice(0, 4);
+  if (!expected.every((byte, i) => byte === raw[raw.length - 4 + i])) throw new Error('Invalid WIF checksum');
+  if (body[0] !== 163 || body[33] !== 1) throw new Error('Not a FloofyChain mainnet compressed WIF');
+  const privateKey = body.slice(1, 33);
+  try {
+    const publicKey = secp256k1.getPublicKey(privateKey, true);
+    return check(35, ripemd160(sha256(publicKey)));
+  } finally {
+    privateKey.fill(0);
+    body.fill(0);
+    raw.fill(0);
+  }
+}
