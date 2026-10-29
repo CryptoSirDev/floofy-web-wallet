@@ -11,3 +11,20 @@ button:not(:disabled){cursor:pointer;background:#6654bb;color:white}button:not(:
 /* Keep backup acknowledgement checkbox compact and aligned with its label. */
 .send-form label:has(input[type="checkbox"]) { display:flex; align-items:center; gap:10px; width:fit-content; max-width:100%; cursor:pointer; line-height:1.45; }
 .send-form input[type="checkbox"] { appearance:auto; flex:0 0 18px; width:18px; height:18px; margin:0; padding:0; accent-color:#8f7aff; border-radius:4px; }
+
+/* Experimental browser wallet dashboard — separate from Core developer data */
+.browser-dashboard{margin-bottom:20px;border-color:#7660d2;background:linear-gradient(145deg,#252454,#182443)}
+.dashboard-header{display:flex;justify-content:space-between;align-items:center;gap:18px;flex-wrap:wrap}
+.dashboard-header h2{font-size:30px;margin:6px 0}
+.dashboard-balance{margin:22px 0;padding:28px;border:1px solid #7660d2;border-radius:18px;background:linear-gradient(130deg,#41328d,#243e79);text-align:center}
+.dashboard-balance h2{font-size:clamp(34px,5vw,52px);margin:8px 0}
+.dashboard-balance p{margin:8px 0}
+.dashboard-address{padding:18px;border:1px solid #455477;border-radius:14px}
+.dashboard-address button{margin-top:12px}
+.dashboard-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:18px 0}
+.dashboard-actions>div{padding:20px 12px;border:1px solid #465579;border-radius:14px;background:#1c2948;text-align:center}
+.dashboard-actions strong{display:block;font-size:18px;margin-bottom:10px}
+.dashboard-actions span{display:block;font-size:12px;color:#a4b2d1}
+.dashboard-history{padding:12px 0}
+.core-separator{margin:28px 0 18px;border-style:dashed;background:#111c31}
+@media(max-width:680px){.dashboard-actions{grid-template-columns:1fr}.dashboard-header{align-items:flex-start}.dashboard-balance{padding:18px}}
