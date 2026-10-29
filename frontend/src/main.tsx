@@ -11,6 +11,7 @@ type WalletSummary = {
   updatedAt: string;
 };
 
+type WalletTransaction = { txid: string; category: 'send' | 'receive' | 'other'; amount: number; confirmations: number; time: number | null; address: string | null };
 const API = 'http://127.0.0.1:3001';
 const formatFloof = (amount: number) =>
   new Intl.NumberFormat('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 8 }).format(amount);
@@ -18,6 +19,8 @@ const formatFloof = (amount: number) =>
 function App() {
   const [summary, setSummary] = useState<WalletSummary | null>(null);
   const [loading, setLoading] = useState(false);
+  const [transactions, setTransactions] = useState<WalletTransaction[]>([]);
+  const [historyError, setHistoryError] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
@@ -31,6 +34,14 @@ function App() {
         throw new Error('Resposta inesperada');
       }
       setSummary(data);
+      try {
+        const historyResponse = await fetch(API + '/api/wallet/transactions', { cache: 'no-store' });
+        if (!historyResponse.ok) throw new Error('History unavailable');
+        const history = await historyResponse.json();
+        if (history.source !== 'local-node-wallet' || !Array.isArray(history.transactions)) throw new Error('Invalid history');
+        setTransactions(history.transactions);
+        setHistoryError(false);
+      } catch { setHistoryError(true); }
     } catch {
       setError('Não foi possível contactar o backend local. Confirma que o servidor está ligado na porta 3001.');
     } finally {
@@ -70,9 +81,21 @@ function App() {
         </article>
         <article className="panel">
           <h2>Wallet actions</h2>
-          <div className="actions"><button disabled>Send</button><button disabled>Receive</button><button disabled>History</button></div>
+          <div className="actions"><button disabled>Send</button><button disabled>Receive</button><button onClick={() => document.getElementById('history')?.scrollIntoView({ behavior: 'smooth' })}>History</button></div>
           <p className="muted">No keys, signing or transaction creation are implemented.</p>
         </article>
+      </section>
+      <section className="panel next" id="history">
+        <h2>Recent transactions <span className="muted">· Connected Core wallet</span></h2>
+        <p className="muted">Last 10 wallet entries. These are not transactions for an arbitrary public address.</p>
+        {historyError && <p role="alert">Transaction history is unavailable. Check the local Core RPC connection.</p>}
+        {!historyError && transactions.length === 0 && <p className="muted">No recent transactions found.</p>}
+        <div className="tx-list">{transactions.map((tx, index) => (
+          <div className="tx-item" key={tx.txid + ':' + index}>
+            <div><strong>{tx.category === 'receive' ? '↓ Received' : tx.category === 'send' ? '↑ Sent' : 'Transaction'}</strong><p className="muted tx-id" title={tx.txid}>{tx.txid || 'Unknown transaction ID'}</p><p className="muted">{tx.time ? new Date(tx.time * 1000).toLocaleString('pt-PT') : 'Unknown date'} · {tx.confirmations} confirmations</p></div>
+            <strong className={tx.amount >= 0 ? 'tx-positive' : 'tx-negative'}>{tx.amount > 0 ? '+' : ''}{formatFloof(tx.amount)} FLOOF</strong>
+          </div>
+        ))}</div>
       </section>
       <section className="panel next">
         <h2>What's next?</h2>
