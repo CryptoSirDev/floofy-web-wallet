@@ -19,6 +19,8 @@ const formatFloof = (amount: number) =>
 
 function App() {
   const [summary, setSummary] = useState<WalletSummary | null>(null);
+  const [walletSetupView, setWalletSetupView] = useState<'home' | 'create' | 'import'>('home');
+  const [importMethod, setImportMethod] = useState<'wif' | 'bip39'>('wif');
   const [loading, setLoading] = useState(false);
   const [transactions, setTransactions] = useState<WalletTransaction[]>([]);
   const [historyError, setHistoryError] = useState(false);
@@ -96,6 +98,44 @@ function App() {
         <p className="eyebrow">FLOOFYCHAIN · READ-ONLY PROTOTYPE</p>
         <h1>Your FLOOF. Your keys. Your control.</h1>
         <p className="subtitle">First milestone: live data from a locally running FloofyChain Core node.</p>
+      </section>
+      <section className="panel setup-panel" id="wallet-setup">
+        <p className="eyebrow">NEXT MILESTONE · INTERFACE PREVIEW ONLY</p>
+        <h2>Create or import a wallet</h2>
+        <p className="muted">Explore the planned wallet setup. This prototype does not generate, accept, store, or import private keys or recovery phrases.</p>
+        {walletSetupView === 'home' ? (
+          <div className="setup-options">
+            <button className="setup-option" onClick={() => setWalletSetupView('create')}>
+              <span className="setup-icon">＋</span><strong>Create New Wallet</strong><span>Explore the future new-wallet setup</span>
+            </button>
+            <button className="setup-option" onClick={() => setWalletSetupView('import')}>
+              <span className="setup-icon">↳</span><strong>Import Existing Wallet</strong><span>See the planned recovery methods</span>
+            </button>
+          </div>
+        ) : (
+          <div className="setup-detail">
+            <button onClick={() => setWalletSetupView('home')}>← Back to wallet options</button>
+            {walletSetupView === 'create' ? (
+              <>
+                <h3>Create New Wallet</h3>
+                <p>Planned steps: generate keys locally, encrypt the wallet, verify a recovery backup, and display the new receiving address.</p>
+                <p className="setup-notice">Not available yet. No wallet or keys have been created. Do not use this prototype to store funds.</p>
+              </>
+            ) : (
+              <>
+                <h3>Import Existing Wallet</h3>
+                <div className="actions">
+                  <button className={importMethod === 'wif' ? 'selected' : ''} onClick={() => setImportMethod('wif')}>Private key (WIF)</button>
+                  <button className={importMethod === 'bip39' ? 'selected' : ''} onClick={() => setImportMethod('bip39')}>12 / 24 words (BIP39)</button>
+                </div>
+                {importMethod === 'wif'
+                  ? <p>WIF import is planned after we verify FloofyChain key and address formats.</p>
+                  : <p>FloofyChain Core does not currently implement BIP39 recovery. Compatibility and derivation paths still need verification.</p>}
+                <p className="setup-notice">Preview only. Never paste a real private key or recovery phrase into this prototype.</p>
+              </>
+            )}
+          </div>
+        )}
       </section>
       <section className="grid">
         <article className="panel balance">
