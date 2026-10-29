@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import ReactDOM from 'react-dom/client';
 import QRCode from 'qrcode';
 import './style.css';
+import { createEphemeralWallet } from './experimentalWallet';
 
 type WalletSummary = {
   source: 'local-node-wallet';
@@ -21,6 +22,9 @@ function App() {
   const [summary, setSummary] = useState<WalletSummary | null>(null);
   const [walletSetupView, setWalletSetupView] = useState<'home' | 'create' | 'import'>('home');
   const [importMethod, setImportMethod] = useState<'wif' | 'bip39'>('wif');
+  const [experimentalWallet, setExperimentalWallet] = useState<{address: string; wif: string} | null>(null);
+  const [showExperimentalWif, setShowExperimentalWif] = useState(false);
+  const [experimentalError, setExperimentalError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [sendAddress, setSendAddress] = useState('');
   const [sendAmount, setSendAmount] = useState('');
@@ -106,9 +110,9 @@ function App() {
         <p className="subtitle">First milestone: live data from a locally running FloofyChain Core node.</p>
       </section>
       <section className="panel setup-panel" id="wallet-setup">
-        <p className="eyebrow">NEXT MILESTONE · INTERFACE PREVIEW ONLY</p>
+        <p className="eyebrow">EXPERIMENTAL · LOCAL BROWSER WALLET</p>
         <h2>Create or import a wallet</h2>
-        <p className="muted">Explore the planned wallet setup. This prototype does not generate, accept, store, or import private keys or recovery phrases.</p>
+        <p className="muted">Create a disposable single-key address locally in your browser. No backend receives the key. Import remains a preview. Never fund experimental addresses.</p>
         {walletSetupView === 'home' ? (
           <div className="setup-options">
             <button className="setup-option" onClick={() => setWalletSetupView('create')}>
@@ -124,8 +128,28 @@ function App() {
             {walletSetupView === 'create' ? (
               <>
                 <h3>Create New Wallet</h3>
-                <p>Planned steps: generate keys locally, encrypt the wallet, verify a recovery backup, and display the new receiving address.</p>
-                <p className="setup-notice">Not available yet. No wallet or keys have been created. Do not use this prototype to store funds.</p>
+                <p>Generate a new experimental single-key FLOOF address locally using the browser's cryptographic randomness.</p>
+                <p className="setup-notice">⚠️ TEST ONLY. Not audited. No encryption, no permanent storage, no HD recovery and no signing. Do not send FLOOF to this address. Closing or refreshing this tab loses the key unless you manually save the WIF; do not use it as a real wallet backup.</p>
+                <button type="button" onClick={() => {
+                  try {
+                    setExperimentalWallet(createEphemeralWallet());
+                    setShowExperimentalWif(false);
+                    setExperimentalError(null);
+                  } catch {
+                    setExperimentalWallet(null);
+                    setExperimentalError('Could not create a test wallet. Check browser crypto support.');
+                  }
+                }}>Generate experimental wallet</button>
+                {experimentalError && <p role="alert">{experimentalError}</p>}
+                {experimentalWallet && <div className="send-preview" role="status">
+                  <h3>Experimental wallet created — NOT FOR FUNDS</h3>
+                  <p><strong>Public address:</strong> <code className="send-destination">{experimentalWallet.address}</code></p>
+                  <p className="muted">The WIF is secret. Never send it in chat, screenshots or GitHub.</p>
+                  <button type="button" onClick={() => setShowExperimentalWif(value => !value)}>{showExperimentalWif ? 'Hide private WIF' : 'Reveal private WIF (local screen only)'}</button>
+                  {showExperimentalWif && <p><strong>Private WIF:</strong> <code className="send-destination">{experimentalWallet.wif}</code></p>}
+                  <p className="setup-notice">This address is unrelated to the balance shown below, which belongs to your connected Core wallet. No FLOOF was moved.</p>
+                  <button type="button" onClick={() => { setExperimentalWallet(null); setShowExperimentalWif(false); }}>Discard test wallet from screen</button>
+                </div>}
               </>
             ) : (
               <>
