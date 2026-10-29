@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import ReactDOM from 'react-dom/client';
 import QRCode from 'qrcode';
 import './style.css';
-import { createEphemeralWallet } from './experimentalWallet';
+import { createEphemeralWallet, restoreExperimentalAddress } from './experimentalWallet';
 
 type WalletSummary = {
   source: 'local-node-wallet';
@@ -24,6 +24,9 @@ function App() {
   const [importMethod, setImportMethod] = useState<'wif' | 'bip39'>('wif');
   const [experimentalWallet, setExperimentalWallet] = useState<{address: string; wif: string} | null>(null);
   const [showExperimentalWif, setShowExperimentalWif] = useState(false);
+  const [testWifInput, setTestWifInput] = useState('');
+  const [restoredTestAddress, setRestoredTestAddress] = useState<string | null>(null);
+  const [restoreTestError, setRestoreTestError] = useState<string | null>(null);
   const [experimentalError, setExperimentalError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [sendAddress, setSendAddress] = useState('');
@@ -112,7 +115,7 @@ function App() {
       <section className="panel setup-panel" id="wallet-setup">
         <p className="eyebrow">EXPERIMENTAL · LOCAL BROWSER WALLET</p>
         <h2>Create or import a wallet</h2>
-        <p className="muted">Create a disposable single-key address locally in your browser. No backend receives the key. Import remains a preview. Never fund experimental addresses.</p>
+        <p className="muted">Create a disposable single-key address locally in your browser. No backend receives the key. Experimental WIF restoration is available. Never fund experimental addresses.</p>
         {walletSetupView === 'home' ? (
           <div className="setup-options">
             <button className="setup-option" onClick={() => setWalletSetupView('create')}>
@@ -158,10 +161,41 @@ function App() {
                   <button className={importMethod === 'wif' ? 'selected' : ''} onClick={() => setImportMethod('wif')}>Private key (WIF)</button>
                   <button className={importMethod === 'bip39' ? 'selected' : ''} onClick={() => setImportMethod('bip39')}>12 / 24 words (BIP39)</button>
                 </div>
-                {importMethod === 'wif'
-                  ? <p>WIF import is planned after we verify FloofyChain key and address formats.</p>
-                  : <p>FloofyChain Core does not currently implement BIP39 recovery. Compatibility and derivation paths still need verification.</p>}
-                <p className="setup-notice">Preview only. Never paste a real private key or recovery phrase into this prototype.</p>
+                {importMethod === 'wif' ? <>
+                  <p>Restore the address of an EMPTY experimental wallet from its WIF. Local computation only; no Core import, funds, network access or storage.</p>
+                  <p className="setup-notice">⚠️ EXPERIMENTAL TEST ONLY. Never enter a WIF from a real wallet or a wallet containing funds. Do not use browser extensions or screen recordings that might capture your test WIF.</p>
+                  <form className="send-form" autoComplete="off" onSubmit={event => {
+                    event.preventDefault();
+                    try {
+                      const address = restoreExperimentalAddress(testWifInput.trim());
+                      setRestoredTestAddress(address);
+                      setRestoreTestError(null);
+                    } catch {
+                      setRestoredTestAddress(null);
+                      setRestoreTestError('Invalid WIF: check Base58, checksum, network and compressed key format.');
+                    } finally {
+                      setTestWifInput('');
+                    }
+                  }}>
+                    <label htmlFor="test-wif">Experimental WIF (never use a real funded wallet)</label>
+                    <input id="test-wif" type="password" value={testWifInput} maxLength={128} autoComplete="off" spellCheck={false} placeholder="Paste a test-only WIF" onChange={event => {
+                      setTestWifInput(event.target.value);
+                      setRestoredTestAddress(null);
+                      setRestoreTestError(null);
+                    }} />
+                    <button type="submit" disabled={!testWifInput.trim()}>Restore Test Wallet Address</button>
+                    <button type="button" onClick={() => { setTestWifInput(''); setRestoredTestAddress(null); setRestoreTestError(null); }}>Clear test input and result</button>
+                  </form>
+                  {restoreTestError && <p role="alert" className="setup-notice">{restoreTestError}</p>}
+                  {restoredTestAddress && <div className="send-preview" role="status">
+                    <h3>Test address recovered offline!</h3>
+                    <p><strong>Recovered public address:</strong> <code className="send-destination">{restoredTestAddress}</code></p>
+                    <p className="setup-notice">This only reconstructs an address. It does not import keys into Core, check balance or enable spending. DO NOT FUND.</p>
+                  </div>}
+                </> : <>
+                  <p>FloofyChain Core does not currently implement BIP39 recovery. Compatibility and derivation paths still need verification.</p>
+                  <p className="setup-notice">Preview only. Never paste a real recovery phrase into this prototype.</p>
+                </>}
               </>
             )}
           </div>
