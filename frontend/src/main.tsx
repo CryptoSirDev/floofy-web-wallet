@@ -124,7 +124,7 @@ function App() {
         <h1>Your FLOOF. Your keys. Your control.</h1>
         <p className="subtitle">First milestone: live data from a locally running FloofyChain Core node.</p>
       </section>
-      <section className="panel setup-panel" id="wallet-setup">
+      {(!vaultPresent || (experimentalWallet && creationStage === 'backup')) && <section className="panel setup-panel" id="wallet-setup">
         <p className="eyebrow">EXPERIMENTAL · LOCAL BROWSER WALLET</p>
         <h2>Create or import a wallet</h2>
         <p className="muted">Create a disposable single-key address locally in your browser. No backend receives the key. Experimental WIF restoration is available. Never fund experimental addresses.</p>
@@ -144,7 +144,7 @@ function App() {
               <>
                 <h3>Create New Wallet</h3>
                 <p>Generate a new experimental single-key FLOOF address locally using the browser's cryptographic randomness.</p>
-                <p className="setup-notice">⚠️ TEST ONLY. Not audited. No encryption, no permanent storage, no HD recovery and no signing. Do not send FLOOF to this address. Closing or refreshing this tab loses the key unless you manually save the WIF; do not use it as a real wallet backup.</p>
+                <p className="setup-notice">⚠️ TEST ONLY. Not audited. Local encryption is experimental; there is no HD recovery or signing. Never send FLOOF to this address. Keep the WIF backup separate from the browser.</p>
                 <button type="button" onClick={() => {
                   try {
                     if (vaultPresent) throw Error('Vault already exists');
@@ -182,7 +182,7 @@ function App() {
                     <button type="button" onClick={() => setShowExperimentalWif(v => !v)}>{showExperimentalWif ? 'Hide test WIF' : 'Reveal test WIF'}</button>
                     {showExperimentalWif && <p>Private test WIF: <code className="send-destination">{experimentalWallet.wif}</code></p>}
                     <label><input type="checkbox" checked={backupConfirmed} onChange={e => setBackupConfirmed(e.target.checked)} /> I saved the experimental WIF backup</label>
-                    <button type="button" disabled={!backupConfirmed} onClick={() => { setExperimentalWallet(null); setShowExperimentalWif(false); setVaultMode('unlock'); setVaultNotice('Test wallet setup complete. Unlock it below.'); }}>Finish test setup</button>
+                    <button type="button" disabled={!backupConfirmed} onClick={() => { setExperimentalWallet(null); setShowExperimentalWif(false); setVaultMode('unlock'); setVaultNotice('Test wallet setup complete. Unlock with your password.'); }}>Finish test setup</button>
                   </>}
                   {vaultNotice && <p role="alert" className="setup-notice">{vaultNotice}</p>}
                 </div>}
@@ -233,8 +233,8 @@ function App() {
             )}
           </div>
         )}
-      </section>
-      <section className="panel setup-panel" id="experimental-vault">
+      </section>}
+      {vaultPresent && !(experimentalWallet && creationStage === 'backup') && <section className="panel setup-panel" id="experimental-vault">
         <p className="eyebrow">EXPERIMENTAL · ENCRYPTED LOCAL STORAGE</p>
         <h2>Unlock or recover your test wallet</h2>
         <p className="setup-notice">⚠️ EMPTY TEST WALLETS ONLY. Browser storage is not a secure hardware wallet. Never use real funded keys. A forgotten password cannot be recovered; a saved WIF can be used to replace the test vault with a new password.</p>
@@ -277,8 +277,8 @@ function App() {
         </form>
         {vaultNotice && <p role="status" className="setup-notice">{vaultNotice}</p>}
         {vaultUnlocked && <p>Unlocked address: <code>{vaultAddress}</code> — no signing or funds access enabled.</p>}
-        {vaultPresent && <button type="button" onClick={() => { if (window.confirm('Delete the saved encrypted TEST vault from this browser? This cannot be undone.')) { clearTestVault(); setVaultPresent(false); setVaultAddress(null); setVaultUnlocked(false); setVaultNotice('Encrypted test vault deleted from browser storage.'); } }}>Delete encrypted test vault</button>}
-      </section>
+        {vaultPresent && <button type="button" onClick={() => { if (window.confirm('WARNING: This permanently deletes the encrypted TEST vault from this browser. If you do not have the correct WIF backup, you may permanently lose access to this wallet and any funds associated with it. This action cannot be undone. Are you absolutely sure?')) { clearTestVault(); setVaultPresent(false); setVaultAddress(null); setVaultUnlocked(false); setVaultNotice(''); setVaultMode('unlock'); setVaultPassword(''); setVaultConfirm(''); setVaultWif(''); setWalletSetupView('home'); } }}>Delete encrypted test vault</button>}
+      </section>}
 
       <section className="grid">
         <article className="panel balance">
