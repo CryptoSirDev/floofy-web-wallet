@@ -81,7 +81,7 @@ function App() {
     return () => { active = false; };
   }, []);
 
-  const sendAmountValid = /^(?:0|[1-9]\\d*)(?:\\.\\d{1,8})?$/.test(sendAmount) && Number(sendAmount) > 0 && Number.isFinite(Number(sendAmount));
+  const sendAmountValid = /^(?:0|[1-9]\d*)(?:\.\d{1,8})?$/.test(sendAmount) && Number(sendAmount) > 0 && Number.isFinite(Number(sendAmount));
   const sendAddressPresent = sendAddress.trim().length > 0;
 
   const copyAddress = async () => {
