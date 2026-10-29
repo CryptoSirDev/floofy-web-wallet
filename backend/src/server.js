@@ -24,6 +24,7 @@ const rpcHost = process.env.RPC_HOST || '127.0.0.1';
 const rpcPort = Number(process.env.RPC_PORT || 18332);
 const rpcUser = process.env.RPC_USER;
 const rpcPassword = process.env.RPC_PASSWORD;
+const receiveAddress = (process.env.RECEIVE_ADDRESS || '').trim();
 
 if (host !== '127.0.0.1' || rpcHost !== '127.0.0.1') {
   throw new Error('This prototype only supports localhost binding. Do not expose the API or RPC publicly.');
@@ -81,7 +82,7 @@ const server = http.createServer(async (req, res) => {
     res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
     res.writeHead(204); res.end(); return;
   }
-  if (req.method !== 'GET' || !['/api/health', '/api/wallet/summary', '/api/wallet/transactions'].includes(req.url)) {
+  if (req.method !== 'GET' || !['/api/health', '/api/wallet/summary', '/api/wallet/transactions', '/api/wallet/receive'].includes(req.url)) {
     res.writeHead(404); res.end(JSON.stringify({ error: 'Not found' })); return;
   }
   try {
@@ -89,6 +90,18 @@ const server = http.createServer(async (req, res) => {
       const chain = await rpc('getblockchaininfo');
       res.writeHead(200);
       res.end(JSON.stringify({ ok: true, chain: chain.chain, blocks: chain.blocks, initialblockdownload: chain.initialblockdownload }));
+      return;
+    }
+    if (req.url === '/api/wallet/receive') {
+      if (!receiveAddress) {
+        res.writeHead(200); res.end(JSON.stringify({ source: 'local-node-wallet', configured: false })); return;
+      }
+      const validation = await rpc('validateaddress', [receiveAddress]);
+      if (validation?.isvalid !== true || validation?.ismine !== true) {
+        res.writeHead(422); res.end(JSON.stringify({ error: 'Configured address is invalid or not owned by the connected Core wallet' })); return;
+      }
+      res.writeHead(200);
+      res.end(JSON.stringify({ source: 'local-node-wallet', configured: true, address: receiveAddress }));
       return;
     }
     if (req.url === '/api/wallet/transactions') {
