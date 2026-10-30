@@ -73,4 +73,16 @@ export async function recoverBip39TestVault(phrase: string, newPassword: string)
   localStorage.setItem(STORAGE_KEY, JSON.stringify(record));
   return address;
 }
+
+// Re-authenticate before showing the existing test mnemonic. Never persist plaintext.
+export async function revealBip39TestRecoveryPhrase(password: string) {
+  const record = read();
+  if (!record) throw Error('No BIP39 test vault');
+  const key = await encryptionKey(password, new Uint8Array(record.salt));
+  const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: new Uint8Array(record.iv) }, key, new Uint8Array(record.encrypted));
+  const phrase = new TextDecoder().decode(plain);
+  if (!isValidTestMnemonic(phrase) || deriveTestBip39Addresses(phrase, '', 1)[0].address !== record.address)
+    throw Error('Test vault data mismatch');
+  return phrase;
+}
 export function clearBip39TestVault() { localStorage.removeItem(STORAGE_KEY); }
