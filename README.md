@@ -11,7 +11,7 @@ This is an **experimental, educational proof of concept**, preserved openly for 
 ### Implemented
 
 - React + TypeScript + Vite interface with a multi-step **Create Wallet** experience.
-- **Experimental 24-word BIP39 test flow**: generate locally, verify a complete saved phrase, choose a password, encrypt a separate BIP39 browser vault, unlock/lock, recover the same saved test wallet using its 24-word phrase and a new password, and view the first derived public address. The provisional BIP44 coin type is 666; no interoperability with future official wallets is guaranteed.
+- **Experimental 24-word BIP39 test flow**: generate locally, verify a complete saved phrase, choose a password, encrypt a separate BIP39 browser vault, unlock/lock, recover the same saved test wallet using its 24-word phrase and a new password, re-authenticate in Settings to reveal/hide the original 24-word test phrase, and view the first derived public address. The provisional BIP44 coin type is 666; no interoperability with future official wallets is guaranteed.
 - **Experimental BIP39 import preview**: derive public test addresses from an existing 24-word test phrase without saving or activating an imported wallet.
 - Browser-side experimental single-key address and WIF generation using secp256k1, hashing and Base58Check.
 - Offline WIF validation and address reconstruction; a recovered address **does not** mean the key was imported into Core.
