@@ -49,4 +49,28 @@ export async function unlockBip39TestVault(password: string) {
   if (derived !== record.address) throw Error('Test vault address mismatch');
   return derived; // Do not expose mnemonic to the UI.
 }
+
+// Recover an EXISTING local test vault only if the phrase derives its saved address.
+// Do not replace the old ciphertext until encryption succeeds.
+export async function recoverBip39TestVault(phrase: string, newPassword: string) {
+  const existing = read();
+  if (!existing) throw Error('No existing BIP39 test vault');
+  if (newPassword.length < 12) throw Error('New password must contain at least 12 characters');
+  const normalized = normalizeTestMnemonic(phrase);
+  if (!isValidTestMnemonic(normalized)) throw Error('Invalid 24-word test phrase');
+  const address = deriveTestBip39Addresses(normalized, '', 1)[0].address;
+  if (address !== existing.address) throw Error('Recovery phrase does not match this saved test wallet');
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const key = await encryptionKey(newPassword, salt);
+  const encrypted = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, new TextEncoder().encode(normalized)));
+  const record: VaultRecord = { version: 1, address, salt: [...salt], iv: [...iv], encrypted: [...encrypted] };
+  // Re-check that the original has not been replaced during asynchronous encryption.
+  const current = read();
+  if (!current || current.address !== existing.address ||
+      current.iv.some((v, i) => v !== existing.iv[i]) ||
+      current.salt.some((v, i) => v !== existing.salt[i])) throw Error('Saved vault changed during recovery');
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(record));
+  return address;
+}
 export function clearBip39TestVault() { localStorage.removeItem(STORAGE_KEY); }
