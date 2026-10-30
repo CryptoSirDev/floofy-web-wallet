@@ -5,7 +5,7 @@ import './style.css';
 import { createEphemeralWallet, restoreExperimentalAddress } from './experimentalWallet';
 import { createTestMnemonic, deriveTestBip39Addresses, isValidTestMnemonic, type TestDerivedAddress } from './experimentalBip39';
 import { hasTestVault, testVaultAddress, saveTestVault, unlockTestVault, clearTestVault } from './experimentalVault';
-import { hasBip39TestVault, bip39TestVaultAddress, saveBip39TestVault, unlockBip39TestVault, recoverBip39TestVault, clearBip39TestVault } from './experimentalBip39Vault';
+import { hasBip39TestVault, bip39TestVaultAddress, saveBip39TestVault, unlockBip39TestVault, recoverBip39TestVault, revealBip39TestRecoveryPhrase, clearBip39TestVault } from './experimentalBip39Vault';
 
 type WalletSummary = {
   source: 'local-node-wallet';
@@ -36,6 +36,11 @@ function App() {
   const [bip39VaultNotice, setBip39VaultNotice] = useState('');
   const [bip39RecoveryMode, setBip39RecoveryMode] = useState(false);
   const [bip39RecoveryPhrase, setBip39RecoveryPhrase] = useState('');
+  const [bip39SettingsOpen, setBip39SettingsOpen] = useState(false);
+  const [bip39RevealPassword, setBip39RevealPassword] = useState('');
+  const [bip39RevealedPhrase, setBip39RevealedPhrase] = useState('');
+  const [bip39RevealError, setBip39RevealError] = useState('');
+  const [bip39RevealBusy, setBip39RevealBusy] = useState(false);
   const [bip39VerifyInput, setBip39VerifyInput] = useState('');
   const [bip39BackupAcknowledged, setBip39BackupAcknowledged] = useState(false);
   const [testMnemonic, setTestMnemonic] = useState('');
@@ -436,7 +441,7 @@ function App() {
         <div className="dashboard-header">
           <div><p className="eyebrow">FLOOFYCHAIN · EXPERIMENTAL BIP39 BROWSER WALLET</p>
           <h2>My Wallet</h2><p className="muted">Unlocked test wallet · 24-word BIP39</p></div>
-          <button type="button" onClick={() => { setBip39VaultUnlocked(false); setBip39Password(''); setBip39VaultNotice('Wallet locked.'); }}>Lock Wallet</button>
+          <button type="button" onClick={() => { setBip39VaultUnlocked(false); setBip39Password(''); setBip39VaultNotice('Wallet locked.'); setBip39SettingsOpen(false); setBip39RevealPassword(''); setBip39RevealedPhrase(''); setBip39RevealError(''); }}>Lock Wallet</button>
         </div>
         <div className="dashboard-balance"><p className="muted">Browser wallet balance</p><h2>— FLOOF</h2>
           <p>Unavailable · Address-based indexing not implemented</p></div>
@@ -448,6 +453,35 @@ function App() {
         <div className="dashboard-actions"><div><strong>↑ Send</strong><span>Disabled · No signing</span></div>
           <div><strong>↓ Receive</strong><span>Test only · Do not fund</span></div>
           <div><strong>◷ History</strong><span>Unavailable</span></div></div>
+        <div className="send-preview">
+          <h3>⚙️ Settings</h3>
+          <button type="button" onClick={() => {
+            setBip39SettingsOpen(v => !v); setBip39RevealPassword(''); setBip39RevealedPhrase(''); setBip39RevealError('');
+          }}>{bip39SettingsOpen ? 'Close Settings' : 'Open Settings'}</button>
+          {bip39SettingsOpen && <div className="send-form">
+            <h4>Show Recovery Phrase</h4>
+            <p>Enter your current wallet password again to reveal your saved 24-word TEST phrase.</p>
+            <form className="send-form" autoComplete="off" onSubmit={async event => {
+              event.preventDefault(); setBip39RevealBusy(true); setBip39RevealError(''); setBip39RevealedPhrase('');
+              try {
+                const phrase = await revealBip39TestRecoveryPhrase(bip39RevealPassword);
+                setBip39RevealedPhrase(phrase);
+              } catch { setBip39RevealError('Incorrect password or unreadable test vault.'); }
+              finally { setBip39RevealPassword(''); setBip39RevealBusy(false); }
+            }}>
+              <label htmlFor="bip39-reveal-password">Confirm wallet password</label>
+              <input id="bip39-reveal-password" type="password" autoComplete="off" value={bip39RevealPassword}
+                onChange={e => { setBip39RevealPassword(e.target.value); setBip39RevealError(''); setBip39RevealedPhrase(''); }} />
+              <button type="submit" disabled={bip39RevealBusy}>{bip39RevealBusy ? 'Verifying…' : 'Show Recovery Phrase'}</button>
+            </form>
+            {bip39RevealError && <p role="alert" className="setup-notice">{bip39RevealError}</p>}
+            {bip39RevealedPhrase && <>
+              <p className="setup-notice">Recovery words are visible on this screen. Keep them private and hide them when finished.</p>
+              <textarea rows={4} readOnly spellCheck={false} value={bip39RevealedPhrase} aria-label="Visible test recovery phrase" />
+              <button type="button" onClick={() => { setBip39RevealedPhrase(''); setBip39RevealError(''); }}>Hide Recovery Phrase</button>
+            </>}
+          </div>}
+        </div>
         <p className="setup-notice">Experimental BIP39 vault only. No balance lookup, transaction signing or spending. Coin type 666 remains provisional.</p>
       </section>}
       {vaultPresent && !vaultUnlocked && !(experimentalWallet && (creationStage === 'backup' || creationStage === 'verify')) && <section className="panel setup-panel" id="experimental-vault">
