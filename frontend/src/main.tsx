@@ -5,7 +5,7 @@ import './style.css';
 import { createEphemeralWallet, restoreExperimentalAddress } from './experimentalWallet';
 import { createTestMnemonic, deriveTestBip39Addresses, isValidTestMnemonic, type TestDerivedAddress } from './experimentalBip39';
 import { hasTestVault, testVaultAddress, saveTestVault, unlockTestVault, clearTestVault } from './experimentalVault';
-import { hasBip39TestVault, bip39TestVaultAddress, saveBip39TestVault, unlockBip39TestVault, clearBip39TestVault } from './experimentalBip39Vault';
+import { hasBip39TestVault, bip39TestVaultAddress, saveBip39TestVault, unlockBip39TestVault, recoverBip39TestVault, clearBip39TestVault } from './experimentalBip39Vault';
 
 type WalletSummary = {
   source: 'local-node-wallet';
@@ -34,6 +34,8 @@ function App() {
   const [bip39PasswordConfirm, setBip39PasswordConfirm] = useState('');
   const [bip39VaultBusy, setBip39VaultBusy] = useState(false);
   const [bip39VaultNotice, setBip39VaultNotice] = useState('');
+  const [bip39RecoveryMode, setBip39RecoveryMode] = useState(false);
+  const [bip39RecoveryPhrase, setBip39RecoveryPhrase] = useState('');
   const [bip39VerifyInput, setBip39VerifyInput] = useState('');
   const [bip39BackupAcknowledged, setBip39BackupAcknowledged] = useState(false);
   const [testMnemonic, setTestMnemonic] = useState('');
@@ -370,26 +372,62 @@ function App() {
       </section>}
       {bip39VaultPresent && !bip39VaultUnlocked && <section className="panel setup-panel" id="bip39-unlock">
         <p className="eyebrow">EXPERIMENTAL · BIP39 LOCAL VAULT</p>
-        <h2>Unlock your BIP39 test wallet</h2>
+        <h2>{bip39RecoveryMode ? 'Recover BIP39 test wallet' : 'Unlock your BIP39 test wallet'}</h2>
         <p>Saved public address: <code>{bip39VaultAddress ?? 'Unavailable'}</code></p>
+        <div className="actions">
+          <button type="button" className={!bip39RecoveryMode ? 'selected' : ''} onClick={() => {
+            setBip39RecoveryMode(false); setBip39RecoveryPhrase(''); setBip39Password('');
+            setBip39PasswordConfirm(''); setBip39VaultNotice('');
+          }}>Unlock with password</button>
+          <button type="button" className={bip39RecoveryMode ? 'selected' : ''} onClick={() => {
+            setBip39RecoveryMode(true); setBip39RecoveryPhrase(''); setBip39Password('');
+            setBip39PasswordConfirm(''); setBip39VaultNotice('');
+          }}>Forgot password? Recover with 24 words</button>
+        </div>
+        {bip39RecoveryMode && <p className="setup-notice">Enter the exact 24-word TEST phrase for this saved address. A matching phrase allows you to replace the local encrypted vault password. An incorrect phrase leaves the old vault unchanged.</p>}
         <form className="send-form" autoComplete="off" onSubmit={async event => {
           event.preventDefault(); setBip39VaultBusy(true); setBip39VaultNotice('');
           try {
-            const address = await unlockBip39TestVault(bip39Password);
-            setBip39VaultAddress(address); setBip39VaultUnlocked(true);
-            setBip39VaultNotice('BIP39 test wallet unlocked.');
-          } catch { setBip39VaultNotice('Incorrect password or damaged test vault.'); }
-          finally { setBip39Password(''); setBip39VaultBusy(false); }
+            if (bip39RecoveryMode) {
+              if (bip39Password !== bip39PasswordConfirm) throw Error('New passwords do not match.');
+              const address = await recoverBip39TestVault(bip39RecoveryPhrase, bip39Password);
+              setBip39VaultAddress(address); setBip39VaultUnlocked(true);
+              setBip39RecoveryMode(false); setBip39RecoveryPhrase('');
+              setBip39VaultNotice('Test wallet recovered and protected with the new password.');
+            } else {
+              const address = await unlockBip39TestVault(bip39Password);
+              setBip39VaultAddress(address); setBip39VaultUnlocked(true);
+              setBip39VaultNotice('BIP39 test wallet unlocked.');
+            }
+          } catch (err) {
+            setBip39VaultNotice(bip39RecoveryMode
+              ? (err instanceof Error ? err.message : 'Could not recover the test wallet.')
+              : 'Incorrect password or damaged test vault.');
+          } finally {
+            setBip39Password(''); setBip39PasswordConfirm(''); setBip39VaultBusy(false);
+          }
         }}>
-          <label htmlFor="bip39-unlock-password">Password</label>
-          <input id="bip39-unlock-password" type="password" autoComplete="current-password" value={bip39Password} onChange={e => setBip39Password(e.target.value)} />
-          <button type="submit" disabled={bip39VaultBusy}>{bip39VaultBusy ? 'Unlocking…' : 'Unlock test wallet'}</button>
+          {bip39RecoveryMode && <>
+            <label htmlFor="bip39-recovery-phrase">Saved 24-word TEST recovery phrase</label>
+            <textarea id="bip39-recovery-phrase" rows={4} spellCheck={false} autoComplete="off" value={bip39RecoveryPhrase}
+              onChange={e => { setBip39RecoveryPhrase(e.target.value); setBip39VaultNotice(''); }} />
+          </>}
+          <label htmlFor="bip39-unlock-password">{bip39RecoveryMode ? 'New password (12+ characters)' : 'Password'}</label>
+          <input id="bip39-unlock-password" type="password" autoComplete={bip39RecoveryMode ? 'new-password' : 'current-password'} value={bip39Password}
+            onChange={e => setBip39Password(e.target.value)} />
+          {bip39RecoveryMode && <>
+            <label htmlFor="bip39-recovery-confirm">Confirm new password</label>
+            <input id="bip39-recovery-confirm" type="password" autoComplete="new-password" value={bip39PasswordConfirm}
+              onChange={e => setBip39PasswordConfirm(e.target.value)} />
+          </>}
+          <button type="submit" disabled={bip39VaultBusy}>{bip39VaultBusy ? 'Working…' : bip39RecoveryMode ? 'Verify words & set new password' : 'Unlock test wallet'}</button>
         </form>
         {bip39VaultNotice && <p role="status" className="setup-notice">{bip39VaultNotice}</p>}
         <button type="button" onClick={() => {
           if (window.confirm('Delete this encrypted BIP39 TEST vault from this browser? This cannot be undone. Make sure you have your test recovery phrase.')) {
             clearBip39TestVault(); setBip39VaultPresent(false); setBip39VaultAddress(null);
             setBip39VaultUnlocked(false); setBip39VaultNotice(''); setBip39Password('');
+            setBip39RecoveryPhrase(''); setBip39RecoveryMode(false);
             setBip39CreationStep('generate'); setWalletSetupView('home');
           }
         }}>Delete encrypted BIP39 test vault</button>
