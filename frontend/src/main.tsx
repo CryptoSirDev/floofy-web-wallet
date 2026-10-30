@@ -24,6 +24,10 @@ function App() {
   const [summary, setSummary] = useState<WalletSummary | null>(null);
   const [walletSetupView, setWalletSetupView] = useState<'home' | 'create' | 'import'>('home');
   const [importMethod, setImportMethod] = useState<'wif' | 'bip39'>('wif');
+  const [createMethod, setCreateMethod] = useState<'bip39' | 'wif'>('bip39');
+  const [bip39CreationStep, setBip39CreationStep] = useState<'generate' | 'verify' | 'done'>('generate');
+  const [bip39VerifyInput, setBip39VerifyInput] = useState('');
+  const [bip39BackupAcknowledged, setBip39BackupAcknowledged] = useState(false);
   const [testMnemonic, setTestMnemonic] = useState('');
   const [showTestMnemonic, setShowTestMnemonic] = useState(false);
   const [testBip39Passphrase, setTestBip39Passphrase] = useState('');
@@ -136,7 +140,7 @@ function App() {
       {(!vaultPresent || (experimentalWallet && (creationStage === 'backup' || creationStage === 'verify'))) && <section className="panel setup-panel" id="wallet-setup">
         <p className="eyebrow">EXPERIMENTAL · LOCAL BROWSER WALLET</p>
         <h2>Create or import a wallet</h2>
-        <p className="muted">Create a disposable single-key address locally in your browser. No backend receives the key. Experimental WIF restoration is available. Never fund experimental addresses.</p>
+        <p className="muted">Explore disposable BIP39 or WIF test wallets locally in your browser. No real-funds support. Never fund experimental addresses.</p>
         {walletSetupView === 'home' ? (
           <div className="setup-options">
             <button className="setup-option" onClick={() => setWalletSetupView('create')}>
@@ -152,6 +156,53 @@ function App() {
             {walletSetupView === 'create' ? (
               <>
                 <h3>Create New Wallet</h3>
+                <div className="actions">
+                  <button type="button" className={createMethod === 'bip39' ? 'selected' : ''} onClick={() => setCreateMethod('bip39')}>24-word recovery phrase (BIP39)</button>
+                  <button type="button" className={createMethod === 'wif' ? 'selected' : ''} onClick={() => setCreateMethod('wif')}>Single private key (WIF)</button>
+                </div>
+                {createMethod === 'bip39' ? <div className="send-form">
+                  <p>Create a NEW disposable 24-word test phrase, then verify your backup before completing this research flow.</p>
+                  <p className="setup-notice">⚠️ TEST ONLY — NEVER FUND. BIP44 coin type 666 is provisional. This test phrase is not encrypted or saved in the WIF vault, and there is no signing or spending.</p>
+                  {bip39CreationStep === 'generate' && <>
+                    <button type="button" onClick={() => {
+                      setTestMnemonic(createTestMnemonic()); setTestBip39Passphrase(''); setShowTestMnemonic(false);
+                      setBip39BackupAcknowledged(false); setBip39VerifyInput(''); setTestBip39Addresses([]); setTestBip39Error('');
+                    }}>Generate NEW 24-word test phrase</button>
+                    {testMnemonic && <>
+                      <label htmlFor="new-bip39-phrase">Your NEW test recovery phrase</label>
+                      <textarea id="new-bip39-phrase" rows={4} readOnly spellCheck={false} value={showTestMnemonic ? testMnemonic : '•••••••• •••••••• •••••••• (hidden — click Reveal)'} />
+                      <button type="button" onClick={() => setShowTestMnemonic(v => !v)}>{showTestMnemonic ? 'Hide test words' : 'Reveal test words'}</button>
+                      <label><input type="checkbox" checked={bip39BackupAcknowledged} onChange={e => setBip39BackupAcknowledged(e.target.checked)} /> I have saved this disposable test phrase for verification.</label>
+                      <button type="button" disabled={!bip39BackupAcknowledged} onClick={() => { setShowTestMnemonic(false); setBip39VerifyInput(''); setBip39CreationStep('verify'); }}>Continue to backup verification</button>
+                    </>}
+                  </>}
+                  {bip39CreationStep === 'verify' && <>
+                    <p>Enter all 24 test words from your saved copy. They are not displayed here.</p>
+                    <label htmlFor="verify-bip39-phrase">Verify saved 24-word phrase</label>
+                    <textarea id="verify-bip39-phrase" rows={4} spellCheck={false} autoComplete="off" value={bip39VerifyInput} onChange={e => { setBip39VerifyInput(e.target.value); setTestBip39Error(''); }} />
+                    <button type="button" disabled={!isValidTestMnemonic(bip39VerifyInput)} onClick={() => {
+                      if (bip39VerifyInput.trim().toLowerCase().replace(/\s+/g, ' ') !== testMnemonic.trim().toLowerCase().replace(/\s+/g, ' ')) {
+                        setTestBip39Error('The saved test phrase does not match. Check all 24 words and their order.'); return;
+                      }
+                      try {
+                        setTestBip39Addresses(deriveTestBip39Addresses(testMnemonic));
+                        setBip39VerifyInput(''); setTestBip39Error(''); setBip39CreationStep('done');
+                      } catch { setTestBip39Error('Unable to derive test addresses.'); }
+                    }}>Verify 24-word backup</button>
+                    <button type="button" onClick={() => { setBip39VerifyInput(''); setBip39CreationStep('generate'); }}>Back to test phrase</button>
+                  </>}
+                  {bip39CreationStep === 'done' && <>
+                    <p role="status">✓ Test phrase backup verified locally. No wallet has been saved or activated.</p>
+                    <h4>Derived TEST addresses</h4>
+                    {testBip39Addresses.map(item => <p key={item.path}><code>{item.path}</code> — <code className="send-destination">{item.address}</code></p>)}
+                    <button type="button" onClick={() => {
+                      setTestMnemonic(''); setBip39VerifyInput(''); setTestBip39Addresses([]); setTestBip39Passphrase('');
+                      setBip39CreationStep('generate'); setBip39BackupAcknowledged(false); setShowTestMnemonic(false);
+                    }}>Clear test phrase and start again</button>
+                    <p className="setup-notice">No password vault, balances, transactions or guaranteed recovery. Never fund these addresses.</p>
+                  </>}
+                  {testBip39Error && <p role="alert" className="setup-notice">{testBip39Error}</p>}
+                </div> : <>
                 <p>Generate a new experimental single-key FLOOF address locally using the browser's cryptographic randomness.</p>
                 <p className="setup-notice">⚠️ TEST ONLY. Not audited. Local encryption is experimental; there is no HD recovery or signing. Never send FLOOF to this address. Keep the WIF backup separate from the browser.</p>
                 <button type="button" onClick={() => {
@@ -221,13 +272,14 @@ function App() {
                   </>}
                   {vaultNotice && <p role="alert" className="setup-notice">{vaultNotice}</p>}
                 </div>}
+                </>}
               </>
             ) : (
               <>
                 <h3>Import Existing Wallet</h3>
                 <div className="actions">
                   <button className={importMethod === 'wif' ? 'selected' : ''} onClick={() => setImportMethod('wif')}>Private key (WIF)</button>
-                  <button className={importMethod === 'bip39' ? 'selected' : ''} onClick={() => setImportMethod('bip39')}>12 / 24 words (BIP39)</button>
+                  <button className={importMethod === 'bip39' ? 'selected' : ''} onClick={() => setImportMethod('bip39')}>24 words (BIP39)</button>
                 </div>
                 {importMethod === 'wif' ? <>
                   <p>Restore the address of an EMPTY experimental wallet from its WIF. Local computation only; no Core import, funds, network access or storage.</p>
@@ -261,24 +313,22 @@ function App() {
                     <p className="setup-notice">This only reconstructs an address. It does not import keys into Core, check balance or enable spending. DO NOT FUND.</p>
                   </div>}
                 </> : <>
-                  <p>Experimental 24-word BIP39 wallet research. Generate a disposable phrase or enter a TEST phrase to derive five public addresses locally. Nothing is uploaded or saved.</p>
-                  <p className="setup-notice">⚠️ TEST ONLY — NEVER FUND. The BIP44 coin type 666 and derivation path are provisional and may not be compatible with the final FloofyChain wallet. Do not enter any real recovery phrase.</p>
+                  <p>Restore public addresses from an EXISTING 24-word TEST recovery phrase. No new phrase is generated here.</p>
+                  <p className="setup-notice">⚠️ TEST ONLY — NEVER FUND. The provisional BIP44 coin type 666 may differ from the final wallet. Never enter a real recovery phrase.</p>
                   <div className="send-form">
-                    <button type="button" onClick={() => { setTestMnemonic(createTestMnemonic()); setShowTestMnemonic(true); setTestBip39Addresses([]); setTestBip39Error(''); setTestBip39Passphrase(''); }}>Generate NEW 24-word test phrase</button>
-                    <label htmlFor="test-bip39-phrase">Experimental 24-word recovery phrase</label>
-                    <textarea id="test-bip39-phrase" rows={4} spellCheck={false} autoComplete="off" value={testMnemonic} onChange={e => { setTestMnemonic(e.target.value); setTestBip39Addresses([]); setTestBip39Error(''); }} style={{ WebkitTextSecurity: showTestMnemonic ? 'none' : 'disc' } as React.CSSProperties} />
-                    <button type="button" onClick={() => setShowTestMnemonic(v => !v)}>{showTestMnemonic ? 'Hide test words' : 'Show test words'}</button>
+                    <label htmlFor="test-bip39-phrase">Existing 24-word TEST recovery phrase</label>
+                    <textarea id="test-bip39-phrase" rows={4} spellCheck={false} autoComplete="off" value={testMnemonic} onChange={e => { setTestMnemonic(e.target.value); setTestBip39Addresses([]); setTestBip39Error(''); }} />
                     <label htmlFor="test-bip39-passphrase">Optional BIP39 passphrase (test only)</label>
-                    <input id="test-bip39-passphrase" type="password" autoComplete="off" value={testBip39Passphrase} onChange={e => { setTestBip39Passphrase(e.target.value); setTestBip39Addresses([]); }} placeholder="Leave blank unless testing passphrase recovery" />
+                    <input id="test-bip39-passphrase" type="password" autoComplete="off" value={testBip39Passphrase} onChange={e => { setTestBip39Passphrase(e.target.value); setTestBip39Addresses([]); }} />
                     <button type="button" disabled={!isValidTestMnemonic(testMnemonic)} onClick={() => {
                       try { setTestBip39Addresses(deriveTestBip39Addresses(testMnemonic, testBip39Passphrase)); setTestBip39Error(''); }
-                      catch { setTestBip39Addresses([]); setTestBip39Error('Unable to derive test addresses. Check your phrase.'); }
-                    }}>Derive five TEST addresses offline</button>
-                    <button type="button" onClick={() => { setTestMnemonic(''); setTestBip39Passphrase(''); setTestBip39Addresses([]); setTestBip39Error(''); setShowTestMnemonic(false); }}>Clear BIP39 test session</button>
+                      catch { setTestBip39Addresses([]); setTestBip39Error('Unable to derive test addresses.'); }
+                    }}>Recover five TEST addresses offline</button>
+                    <button type="button" onClick={() => { setTestMnemonic(''); setTestBip39Passphrase(''); setTestBip39Addresses([]); setTestBip39Error(''); }}>Clear test input</button>
                     {testBip39Error && <p role="alert" className="setup-notice">{testBip39Error}</p>}
-                    {testBip39Addresses.length > 0 && <div className="send-preview"><h3>Experimental derived public addresses</h3>
+                    {testBip39Addresses.length > 0 && <div className="send-preview"><h3>Recovered experimental addresses</h3>
                       {testBip39Addresses.map(item => <p key={item.path}><code>{item.path}</code> — <code className="send-destination">{item.address}</code></p>)}
-                      <p className="setup-notice">Not stored in the encrypted WIF vault. No balance lookup, signing, sending, or guaranteed future recovery. DO NOT FUND.</p>
+                      <p className="setup-notice">No keys are stored or imported into Core. No signing or funds support. DO NOT FUND.</p>
                     </div>}
                   </div>
                 </>}
