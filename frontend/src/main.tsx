@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client';
 import QRCode from 'qrcode';
 import './style.css';
 import { createEphemeralWallet, restoreExperimentalAddress } from './experimentalWallet';
+import { createTestMnemonic, deriveTestBip39Addresses, isValidTestMnemonic, type TestDerivedAddress } from './experimentalBip39';
 import { hasTestVault, testVaultAddress, saveTestVault, unlockTestVault, clearTestVault } from './experimentalVault';
 
 type WalletSummary = {
@@ -23,6 +24,11 @@ function App() {
   const [summary, setSummary] = useState<WalletSummary | null>(null);
   const [walletSetupView, setWalletSetupView] = useState<'home' | 'create' | 'import'>('home');
   const [importMethod, setImportMethod] = useState<'wif' | 'bip39'>('wif');
+  const [testMnemonic, setTestMnemonic] = useState('');
+  const [showTestMnemonic, setShowTestMnemonic] = useState(false);
+  const [testBip39Passphrase, setTestBip39Passphrase] = useState('');
+  const [testBip39Addresses, setTestBip39Addresses] = useState<TestDerivedAddress[]>([]);
+  const [testBip39Error, setTestBip39Error] = useState('');
   const [experimentalWallet, setExperimentalWallet] = useState<{address: string; wif: string} | null>(null);
   const [showExperimentalWif, setShowExperimentalWif] = useState(false);
   const [testWifInput, setTestWifInput] = useState('');
@@ -255,8 +261,26 @@ function App() {
                     <p className="setup-notice">This only reconstructs an address. It does not import keys into Core, check balance or enable spending. DO NOT FUND.</p>
                   </div>}
                 </> : <>
-                  <p>FloofyChain Core does not currently implement BIP39 recovery. Compatibility and derivation paths still need verification.</p>
-                  <p className="setup-notice">Preview only. Never paste a real recovery phrase into this prototype.</p>
+                  <p>Experimental 24-word BIP39 wallet research. Generate a disposable phrase or enter a TEST phrase to derive five public addresses locally. Nothing is uploaded or saved.</p>
+                  <p className="setup-notice">⚠️ TEST ONLY — NEVER FUND. The BIP44 coin type 666 and derivation path are provisional and may not be compatible with the final FloofyChain wallet. Do not enter any real recovery phrase.</p>
+                  <div className="send-form">
+                    <button type="button" onClick={() => { setTestMnemonic(createTestMnemonic()); setShowTestMnemonic(true); setTestBip39Addresses([]); setTestBip39Error(''); setTestBip39Passphrase(''); }}>Generate NEW 24-word test phrase</button>
+                    <label htmlFor="test-bip39-phrase">Experimental 24-word recovery phrase</label>
+                    <textarea id="test-bip39-phrase" rows={4} spellCheck={false} autoComplete="off" value={testMnemonic} onChange={e => { setTestMnemonic(e.target.value); setTestBip39Addresses([]); setTestBip39Error(''); }} style={{ WebkitTextSecurity: showTestMnemonic ? 'none' : 'disc' } as React.CSSProperties} />
+                    <button type="button" onClick={() => setShowTestMnemonic(v => !v)}>{showTestMnemonic ? 'Hide test words' : 'Show test words'}</button>
+                    <label htmlFor="test-bip39-passphrase">Optional BIP39 passphrase (test only)</label>
+                    <input id="test-bip39-passphrase" type="password" autoComplete="off" value={testBip39Passphrase} onChange={e => { setTestBip39Passphrase(e.target.value); setTestBip39Addresses([]); }} placeholder="Leave blank unless testing passphrase recovery" />
+                    <button type="button" disabled={!isValidTestMnemonic(testMnemonic)} onClick={() => {
+                      try { setTestBip39Addresses(deriveTestBip39Addresses(testMnemonic, testBip39Passphrase)); setTestBip39Error(''); }
+                      catch { setTestBip39Addresses([]); setTestBip39Error('Unable to derive test addresses. Check your phrase.'); }
+                    }}>Derive five TEST addresses offline</button>
+                    <button type="button" onClick={() => { setTestMnemonic(''); setTestBip39Passphrase(''); setTestBip39Addresses([]); setTestBip39Error(''); setShowTestMnemonic(false); }}>Clear BIP39 test session</button>
+                    {testBip39Error && <p role="alert" className="setup-notice">{testBip39Error}</p>}
+                    {testBip39Addresses.length > 0 && <div className="send-preview"><h3>Experimental derived public addresses</h3>
+                      {testBip39Addresses.map(item => <p key={item.path}><code>{item.path}</code> — <code className="send-destination">{item.address}</code></p>)}
+                      <p className="setup-notice">Not stored in the encrypted WIF vault. No balance lookup, signing, sending, or guaranteed future recovery. DO NOT FUND.</p>
+                    </div>}
+                  </div>
                 </>}
               </>
             )}
