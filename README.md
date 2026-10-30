@@ -11,6 +11,8 @@ This is an **experimental, educational proof of concept**, preserved openly for 
 ### Implemented
 
 - React + TypeScript + Vite interface with a multi-step **Create Wallet** experience.
+- **Experimental 24-word BIP39 test flow**: generate locally, verify a complete saved phrase, choose a password, encrypt a separate BIP39 browser vault, unlock/lock and view the first derived public address. The provisional BIP44 coin type is 666; no interoperability with future official wallets is guaranteed.
+- **Experimental BIP39 import preview**: derive public test addresses from an existing 24-word test phrase without saving or activating an imported wallet.
 - Browser-side experimental single-key address and WIF generation using secp256k1, hashing and Base58Check.
 - Offline WIF validation and address reconstruction; a recovered address **does not** mean the key was imported into Core.
 - Password-protected **local experimental vault**, using Web Crypto AES-256-GCM and PBKDF2-SHA-256 (600,000 iterations, random salt and IV); only the encrypted record is persisted in browser local storage.
@@ -23,11 +25,11 @@ This is an **experimental, educational proof of concept**, preserved openly for 
 
 ### Not implemented / not guaranteed
 
-- ❌ BIP39 mnemonic generation, restoration or deterministic HD wallet compatibility in this repository.
+- ❌ Production-ready or officially compatible BIP39/HD recovery. The test-only BIP39 vault is separate from the WIF vault; imported BIP39 phrases are not yet persisted.
 - ❌ Browser-wallet address balance, UTXO indexing or transaction history.
 - ❌ Transaction creation, signing, broadcasting or real-funds support.
 - ❌ Audited key management, complete threat-model coverage, hardened production deployment or independent security review.
-- ❌ A full multi-address HD wallet, automatic backup or guaranteed recovery if both password and WIF are lost.
+- ❌ A full multi-address HD wallet, automatic backup or guaranteed recovery if the password and recovery material are lost.
 
 **Important:** A WIF backs up only its corresponding single private key. A forgotten vault password cannot be retrieved; a separately saved, correct WIF can be used to create a replacement encrypted test vault. Browser storage can be cleared by the browser/user. A confirmation checkbox or successful WIF verification cannot guarantee that a backup will remain accessible in the future.
 
@@ -73,7 +75,7 @@ The design goal is for private keys to stay on the user's device. **This is a de
 
 ## Repository
 
-- `frontend/` — browser wallet prototype, experimental key and vault modules
+- `frontend/` — browser wallet prototype, experimental WIF and separate BIP39 test vault modules
 - `backend/` — local read-only Core JSON-RPC adapter
 - `lab/` — offline address/WIF research and test scripts
 - `docs/architecture.md` — architecture notes
