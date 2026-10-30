@@ -11,7 +11,7 @@ This is an **experimental, educational proof of concept**, preserved openly for 
 ### Implemented
 
 - React + TypeScript + Vite interface with a multi-step **Create Wallet** experience.
-- **Experimental 24-word BIP39 test flow**: generate locally, verify a complete saved phrase, choose a password, encrypt a separate BIP39 browser vault, unlock/lock and view the first derived public address. The provisional BIP44 coin type is 666; no interoperability with future official wallets is guaranteed.
+- **Experimental 24-word BIP39 test flow**: generate locally, verify a complete saved phrase, choose a password, encrypt a separate BIP39 browser vault, unlock/lock, recover the same saved test wallet using its 24-word phrase and a new password, and view the first derived public address. The provisional BIP44 coin type is 666; no interoperability with future official wallets is guaranteed.
 - **Experimental BIP39 import preview**: derive public test addresses from an existing 24-word test phrase without saving or activating an imported wallet.
 - Browser-side experimental single-key address and WIF generation using secp256k1, hashing and Base58Check.
 - Offline WIF validation and address reconstruction; a recovered address **does not** mean the key was imported into Core.
@@ -31,7 +31,7 @@ This is an **experimental, educational proof of concept**, preserved openly for 
 - ❌ Audited key management, complete threat-model coverage, hardened production deployment or independent security review.
 - ❌ A full multi-address HD wallet, automatic backup or guaranteed recovery if the password and recovery material are lost.
 
-**Important:** A WIF backs up only its corresponding single private key. A forgotten vault password cannot be retrieved; a separately saved, correct WIF can be used to create a replacement encrypted test vault. Browser storage can be cleared by the browser/user. A confirmation checkbox or successful WIF verification cannot guarantee that a backup will remain accessible in the future.
+**BIP39 test-vault recovery:** the 24-word phrase must derive the same saved first address before the encrypted vault can be replaced with a new password. This does not recover a different wallet or enable spending. The BIP39 test vault remains separate from the WIF vault.\n\n**Important:** A WIF backs up only its corresponding single private key. A forgotten vault password cannot be retrieved; a separately saved, correct WIF can be used to create a replacement encrypted test vault. Browser storage can be cleared by the browser/user. A confirmation checkbox or successful WIF verification cannot guarantee that a backup will remain accessible in the future.
 
 ## Local development
 
