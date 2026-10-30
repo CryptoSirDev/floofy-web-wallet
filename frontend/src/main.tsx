@@ -5,6 +5,7 @@ import './style.css';
 import { createEphemeralWallet, restoreExperimentalAddress } from './experimentalWallet';
 import { createTestMnemonic, deriveTestBip39Addresses, isValidTestMnemonic, type TestDerivedAddress } from './experimentalBip39';
 import { hasTestVault, testVaultAddress, saveTestVault, unlockTestVault, clearTestVault } from './experimentalVault';
+import { hasBip39TestVault, bip39TestVaultAddress, saveBip39TestVault, unlockBip39TestVault, clearBip39TestVault } from './experimentalBip39Vault';
 
 type WalletSummary = {
   source: 'local-node-wallet';
@@ -25,7 +26,14 @@ function App() {
   const [walletSetupView, setWalletSetupView] = useState<'home' | 'create' | 'import'>('home');
   const [importMethod, setImportMethod] = useState<'wif' | 'bip39'>('wif');
   const [createMethod, setCreateMethod] = useState<'bip39' | 'wif'>('bip39');
-  const [bip39CreationStep, setBip39CreationStep] = useState<'generate' | 'verify' | 'done'>('generate');
+  const [bip39CreationStep, setBip39CreationStep] = useState<'generate' | 'verify' | 'password'>('generate');
+  const [bip39VaultPresent, setBip39VaultPresent] = useState(() => hasBip39TestVault());
+  const [bip39VaultAddress, setBip39VaultAddress] = useState<string | null>(() => { try { return bip39TestVaultAddress(); } catch { return null; } });
+  const [bip39VaultUnlocked, setBip39VaultUnlocked] = useState(false);
+  const [bip39Password, setBip39Password] = useState('');
+  const [bip39PasswordConfirm, setBip39PasswordConfirm] = useState('');
+  const [bip39VaultBusy, setBip39VaultBusy] = useState(false);
+  const [bip39VaultNotice, setBip39VaultNotice] = useState('');
   const [bip39VerifyInput, setBip39VerifyInput] = useState('');
   const [bip39BackupAcknowledged, setBip39BackupAcknowledged] = useState(false);
   const [testMnemonic, setTestMnemonic] = useState('');
@@ -137,7 +145,7 @@ function App() {
         <h1>Your FLOOF. Your keys. Your control.</h1>
         <p className="subtitle">First milestone: live data from a locally running FloofyChain Core node.</p>
       </section>
-      {(!vaultPresent || (experimentalWallet && (creationStage === 'backup' || creationStage === 'verify'))) && <section className="panel setup-panel" id="wallet-setup">
+      {((!vaultPresent && !bip39VaultPresent) || (experimentalWallet && (creationStage === 'backup' || creationStage === 'verify'))) && <section className="panel setup-panel" id="wallet-setup">
         <p className="eyebrow">EXPERIMENTAL · LOCAL BROWSER WALLET</p>
         <h2>Create or import a wallet</h2>
         <p className="muted">Explore disposable BIP39 or WIF test wallets locally in your browser. No real-funds support. Never fund experimental addresses.</p>
@@ -189,20 +197,40 @@ function App() {
                       }
                       try {
                         setTestBip39Addresses(deriveTestBip39Addresses(testMnemonic));
-                        setBip39VerifyInput(''); setTestBip39Error(''); setBip39CreationStep('done');
+                        setBip39VerifyInput(''); setTestBip39Error(''); setBip39CreationStep('password');
                       } catch { setTestBip39Error('Unable to derive test addresses.'); }
                     }}>Verify 24-word backup</button>
                     <button type="button" onClick={() => { setBip39VerifyInput(''); setBip39CreationStep('generate'); }}>Back to test phrase</button>
                   </>}
-                  {bip39CreationStep === 'done' && <>
-                    <p role="status">✓ Test phrase backup verified locally. No wallet has been saved or activated.</p>
-                    <h4>Derived TEST addresses</h4>
-                    {testBip39Addresses.map(item => <p key={item.path}><code>{item.path}</code> — <code className="send-destination">{item.address}</code></p>)}
-                    <button type="button" onClick={() => {
-                      setTestMnemonic(''); setBip39VerifyInput(''); setTestBip39Addresses([]); setTestBip39Passphrase('');
-                      setBip39CreationStep('generate'); setBip39BackupAcknowledged(false); setShowTestMnemonic(false);
-                    }}>Clear test phrase and start again</button>
-                    <p className="setup-notice">No password vault, balances, transactions or guaranteed recovery. Never fund these addresses.</p>
+                  {bip39CreationStep === 'password' && <>
+                    <p role="status">✓ Your 24-word TEST backup has been verified locally.</p>
+                    <h4>Step 3 — Create a password</h4>
+                    <p>Encrypt your experimental BIP39 phrase in this browser. The password is required to unlock this test vault later.</p>
+                    <form className="send-form" autoComplete="off" onSubmit={async event => {
+                      event.preventDefault();
+                      setBip39VaultBusy(true); setBip39VaultNotice('');
+                      try {
+                        if (vaultPresent || bip39VaultPresent) throw Error('An experimental wallet already exists in this browser');
+                        if (bip39Password.length < 12) throw Error('Password must contain at least 12 characters');
+                        if (bip39Password !== bip39PasswordConfirm) throw Error('Passwords do not match');
+                        const address = await saveBip39TestVault(testMnemonic, bip39Password);
+                        setBip39VaultAddress(address); setBip39VaultPresent(true); setBip39VaultUnlocked(true);
+                        setTestMnemonic(''); setBip39VerifyInput(''); setTestBip39Addresses([]);
+                        setBip39BackupAcknowledged(false); setShowTestMnemonic(false);
+                        setBip39VaultNotice('Encrypted BIP39 test vault created. Your test wallet is unlocked.');
+                      } catch (err) {
+                        setBip39VaultNotice(err instanceof Error ? err.message : 'Could not encrypt test wallet.');
+                      } finally {
+                        setBip39Password(''); setBip39PasswordConfirm(''); setBip39VaultBusy(false);
+                      }
+                    }}>
+                      <label htmlFor="bip39-create-password">Password (12+ characters)</label>
+                      <input id="bip39-create-password" type="password" autoComplete="new-password" value={bip39Password} onChange={e => setBip39Password(e.target.value)} />
+                      <label htmlFor="bip39-create-confirm">Confirm password</label>
+                      <input id="bip39-create-confirm" type="password" autoComplete="new-password" value={bip39PasswordConfirm} onChange={e => setBip39PasswordConfirm(e.target.value)} />
+                      <button type="submit" disabled={bip39VaultBusy}>{bip39VaultBusy ? 'Encrypting…' : 'Encrypt wallet & open dashboard'}</button>
+                    </form>
+                    {bip39VaultNotice && <p role="alert" className="setup-notice">{bip39VaultNotice}</p>}
                   </>}
                   {testBip39Error && <p role="alert" className="setup-notice">{testBip39Error}</p>}
                 </div> : <>
@@ -210,7 +238,7 @@ function App() {
                 <p className="setup-notice">⚠️ TEST ONLY. Not audited. Local encryption is experimental; there is no HD recovery or signing. Never send FLOOF to this address. Keep the WIF backup separate from the browser.</p>
                 <button type="button" onClick={() => {
                   try {
-                    if (vaultPresent) throw Error('Vault already exists');
+                    if (vaultPresent || bip39VaultPresent) throw Error('Vault already exists');
                     setExperimentalWallet(createEphemeralWallet());
                     setCreationStage('password'); setBackupConfirmed(false); setBackupWifCheck(''); setBackupVerified(false); setBackupCheckError('');
                     setShowExperimentalWif(false);
@@ -339,6 +367,50 @@ function App() {
             )}
           </div>
         )}
+      </section>}
+      {bip39VaultPresent && !bip39VaultUnlocked && <section className="panel setup-panel" id="bip39-unlock">
+        <p className="eyebrow">EXPERIMENTAL · BIP39 LOCAL VAULT</p>
+        <h2>Unlock your BIP39 test wallet</h2>
+        <p>Saved public address: <code>{bip39VaultAddress ?? 'Unavailable'}</code></p>
+        <form className="send-form" autoComplete="off" onSubmit={async event => {
+          event.preventDefault(); setBip39VaultBusy(true); setBip39VaultNotice('');
+          try {
+            const address = await unlockBip39TestVault(bip39Password);
+            setBip39VaultAddress(address); setBip39VaultUnlocked(true);
+            setBip39VaultNotice('BIP39 test wallet unlocked.');
+          } catch { setBip39VaultNotice('Incorrect password or damaged test vault.'); }
+          finally { setBip39Password(''); setBip39VaultBusy(false); }
+        }}>
+          <label htmlFor="bip39-unlock-password">Password</label>
+          <input id="bip39-unlock-password" type="password" autoComplete="current-password" value={bip39Password} onChange={e => setBip39Password(e.target.value)} />
+          <button type="submit" disabled={bip39VaultBusy}>{bip39VaultBusy ? 'Unlocking…' : 'Unlock test wallet'}</button>
+        </form>
+        {bip39VaultNotice && <p role="status" className="setup-notice">{bip39VaultNotice}</p>}
+        <button type="button" onClick={() => {
+          if (window.confirm('Delete this encrypted BIP39 TEST vault from this browser? This cannot be undone. Make sure you have your test recovery phrase.')) {
+            clearBip39TestVault(); setBip39VaultPresent(false); setBip39VaultAddress(null);
+            setBip39VaultUnlocked(false); setBip39VaultNotice(''); setBip39Password('');
+            setBip39CreationStep('generate'); setWalletSetupView('home');
+          }
+        }}>Delete encrypted BIP39 test vault</button>
+      </section>}
+      {bip39VaultPresent && bip39VaultUnlocked && <section className="panel browser-dashboard" id="bip39-dashboard">
+        <div className="dashboard-header">
+          <div><p className="eyebrow">FLOOFYCHAIN · EXPERIMENTAL BIP39 BROWSER WALLET</p>
+          <h2>My Wallet</h2><p className="muted">Unlocked test wallet · 24-word BIP39</p></div>
+          <button type="button" onClick={() => { setBip39VaultUnlocked(false); setBip39Password(''); setBip39VaultNotice('Wallet locked.'); }}>Lock Wallet</button>
+        </div>
+        <div className="dashboard-balance"><p className="muted">Browser wallet balance</p><h2>— FLOOF</h2>
+          <p>Unavailable · Address-based indexing not implemented</p></div>
+        <div className="dashboard-address"><p className="muted">First derived test address · m/44'/666'/0'/0/0</p>
+          <code className="receive-address">{bip39VaultAddress ?? 'Unavailable'}</code>
+          <button type="button" disabled={!bip39VaultAddress} onClick={() => {
+            if (bip39VaultAddress) void navigator.clipboard.writeText(bip39VaultAddress);
+          }}>Copy public address</button></div>
+        <div className="dashboard-actions"><div><strong>↑ Send</strong><span>Disabled · No signing</span></div>
+          <div><strong>↓ Receive</strong><span>Test only · Do not fund</span></div>
+          <div><strong>◷ History</strong><span>Unavailable</span></div></div>
+        <p className="setup-notice">Experimental BIP39 vault only. No balance lookup, transaction signing or spending. Coin type 666 remains provisional.</p>
       </section>}
       {vaultPresent && !vaultUnlocked && !(experimentalWallet && (creationStage === 'backup' || creationStage === 'verify')) && <section className="panel setup-panel" id="experimental-vault">
         <p className="eyebrow">EXPERIMENTAL · ENCRYPTED LOCAL STORAGE</p>
