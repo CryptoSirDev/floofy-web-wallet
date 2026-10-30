@@ -180,7 +180,10 @@ function App() {
                     <p>Enter all 24 test words from your saved copy. They are not displayed here.</p>
                     <label htmlFor="verify-bip39-phrase">Verify saved 24-word phrase</label>
                     <textarea id="verify-bip39-phrase" rows={4} spellCheck={false} autoComplete="off" value={bip39VerifyInput} onChange={e => { setBip39VerifyInput(e.target.value); setTestBip39Error(''); }} />
-                    <button type="button" disabled={!isValidTestMnemonic(bip39VerifyInput)} onClick={() => {
+                    <button type="button" onClick={() => {
+                      if (!isValidTestMnemonic(bip39VerifyInput)) {
+                        setTestBip39Error('Invalid recovery phrase. Enter all 24 valid BIP39 words in the correct order, then try again.'); return;
+                      }
                       if (bip39VerifyInput.trim().toLowerCase().replace(/\s+/g, ' ') !== testMnemonic.trim().toLowerCase().replace(/\s+/g, ' ')) {
                         setTestBip39Error('The saved test phrase does not match. Check all 24 words and their order.'); return;
                       }
