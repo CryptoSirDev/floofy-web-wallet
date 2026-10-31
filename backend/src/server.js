@@ -1,4 +1,5 @@
 import http from 'node:http';
+import https from 'node:https';
 import { readFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 
@@ -66,6 +67,28 @@ function rpc(method, params = []) {
   });
 }
 
+function explorerAddress(address) {
+  return new Promise((resolveResult, reject) => {
+    const request = https.get('https://explorer.floofychain.com/api/v1/address/' + encodeURIComponent(address), { timeout: 8000, headers: { Accept: 'application/json' } }, response => {
+      if (response.statusCode !== 200) { response.resume(); reject(new Error('Explorer HTTP ' + response.statusCode)); return; }
+      let body = '';
+      response.setEncoding('utf8');
+      response.on('data', chunk => { body += chunk; if (body.length > 32768) response.destroy(new Error('Explorer response too large')); });
+      response.on('end', () => {
+        try {
+          const data = JSON.parse(body);
+          const validAmount = value => typeof value === 'string' && /^\\d+\\.\\d{8}$/.test(value);
+          if (data.address !== address || !validAmount(data.balance) || !validAmount(data.received) || !validAmount(data.sent) || !Number.isSafeInteger(data.txcount) || data.txcount < 0) throw new Error('Invalid explorer data');
+          resolveResult({ source: 'floofyscan', address, balance: data.balance, received: data.received, sent: data.sent, txcount: data.txcount });
+        } catch { reject(new Error('Invalid explorer response')); }
+      });
+      response.on('error', reject);
+    });
+    request.on('timeout', () => request.destroy(new Error('Explorer timeout')));
+    request.on('error', reject);
+  });
+}
+
 const server = http.createServer(async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -82,10 +105,15 @@ const server = http.createServer(async (req, res) => {
     res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
     res.writeHead(204); res.end(); return;
   }
-  if (req.method !== 'GET' || !['/api/health', '/api/wallet/summary', '/api/wallet/transactions', '/api/wallet/receive'].includes(req.url)) {
+  const explorerMatch = /^\\/api\\/explorer\\/address\\/([A-Za-z0-9]{26,64})$/.exec(req.url || '');
+  if (req.method !== 'GET' || (!explorerMatch && !['/api/health', '/api/wallet/summary', '/api/wallet/transactions', '/api/wallet/receive'].includes(req.url))) {
     res.writeHead(404); res.end(JSON.stringify({ error: 'Not found' })); return;
   }
   try {
+    if (explorerMatch) {
+      const result = await explorerAddress(explorerMatch[1]);
+      res.writeHead(200); res.end(JSON.stringify(result)); return;
+    }
     if (req.url === '/api/health') {
       const chain = await rpc('getblockchaininfo');
       res.writeHead(200);
