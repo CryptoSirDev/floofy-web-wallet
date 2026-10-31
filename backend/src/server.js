@@ -89,6 +89,35 @@ function explorerAddress(address) {
   });
 }
 
+function explorerHistory(address, page) {
+  return new Promise((resolveResult, reject) => {
+    const url = 'https://explorer.floofychain.com/api/v1/address/' + encodeURIComponent(address) + '/txs?page=' + page;
+    const request = https.get(url, { timeout: 8000, headers: { Accept: 'application/json' } }, response => {
+      if (response.statusCode !== 200) { response.resume(); reject(new Error('Explorer HTTP ' + response.statusCode)); return; }
+      let body = '';
+      response.setEncoding('utf8');
+      response.on('data', chunk => { body += chunk; if (body.length > 262144) response.destroy(new Error('Explorer history too large')); });
+      response.on('end', () => {
+        try {
+          const data = JSON.parse(body);
+          const validAmount = value => typeof value === 'string' && /^-?\d+\.\d{8}$/.test(value);
+          if (data.address !== address || data.page !== page || data.limit !== 30 || !Array.isArray(data.transactions) || data.transactions.length > 30) throw new Error('Invalid history');
+          const transactions = data.transactions.map(tx => {
+            if (!/^[0-9a-fA-F]{64}$/.test(tx.txid) || !Number.isSafeInteger(tx.blockindex) || tx.blockindex < 0 ||
+                !Number.isSafeInteger(tx.time) || tx.time < 0 || !validAmount(tx.amount) ||
+                !validAmount(tx.received) || !validAmount(tx.sent)) throw new Error('Invalid transaction');
+            return { txid: tx.txid, blockindex: tx.blockindex, time: tx.time, amount: tx.amount, received: tx.received, sent: tx.sent };
+          });
+          resolveResult({ source: 'floofyscan', address, page, limit: 30, transactions });
+        } catch { reject(new Error('Invalid explorer history response')); }
+      });
+      response.on('error', reject);
+    });
+    request.on('timeout', () => request.destroy(new Error('Explorer history timeout')));
+    request.on('error', reject);
+  });
+}
+
 const server = http.createServer(async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -106,10 +135,15 @@ const server = http.createServer(async (req, res) => {
     res.writeHead(204); res.end(); return;
   }
   const explorerMatch = /^\/api\/explorer\/address\/([A-Za-z0-9]{26,64})$/.exec(req.url || '');
-  if (req.method !== 'GET' || (!explorerMatch && !['/api/health', '/api/wallet/summary', '/api/wallet/transactions', '/api/wallet/receive'].includes(req.url))) {
+  const historyMatch = /^\/api\/explorer\/address\/([A-Za-z0-9]{26,64})\/txs\?page=(0|[1-9][0-9]{0,3})$/.exec(req.url || '');
+  if (req.method !== 'GET' || (!explorerMatch && !historyMatch && !['/api/health', '/api/wallet/summary', '/api/wallet/transactions', '/api/wallet/receive'].includes(req.url))) {
     res.writeHead(404); res.end(JSON.stringify({ error: 'Not found' })); return;
   }
   try {
+    if (historyMatch) {
+      const result = await explorerHistory(historyMatch[1], Number(historyMatch[2]));
+      res.writeHead(200); res.end(JSON.stringify(result)); return;
+    }
     if (explorerMatch) {
       const result = await explorerAddress(explorerMatch[1]);
       res.writeHead(200); res.end(JSON.stringify(result)); return;
