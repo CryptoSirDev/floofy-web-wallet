@@ -34,6 +34,40 @@ function App() {
   const [explorerStatus, setExplorerStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [explorerRefresh, setExplorerRefresh] = useState(0);
   const [explorerPage, setExplorerPage] = useState(0);
+  const [browserReceiveOpen, setBrowserReceiveOpen] = useState(false);
+  const [browserReceiveQr, setBrowserReceiveQr] = useState<string | null>(null);
+  const [browserReceiveError, setBrowserReceiveError] = useState('');
+  const [browserAddressCopied, setBrowserAddressCopied] = useState(false);
+  useEffect(() => {
+    setBrowserReceiveOpen(false);
+    setBrowserReceiveQr(null);
+    setBrowserReceiveError('');
+    setBrowserAddressCopied(false);
+  }, [bip39VaultAddress]);
+  useEffect(() => {
+    if (!browserReceiveOpen || !bip39VaultUnlocked || !bip39VaultAddress) {
+      setBrowserReceiveQr(null);
+      return;
+    }
+    let active = true;
+    setBrowserReceiveQr(null);
+    setBrowserReceiveError('');
+    QRCode.toDataURL(bip39VaultAddress, { errorCorrectionLevel: 'M', margin: 3, width: 256 })
+      .then(url => { if (active) setBrowserReceiveQr(url); })
+      .catch(() => { if (active) setBrowserReceiveError('Unable to generate receiving QR code.'); });
+    return () => { active = false; };
+  }, [browserReceiveOpen, bip39VaultUnlocked, bip39VaultAddress]);
+  const copyBrowserAddress = async () => {
+    if (!bip39VaultAddress) return;
+    try {
+      await navigator.clipboard.writeText(bip39VaultAddress);
+      setBrowserAddressCopied(true);
+      setBrowserReceiveError('');
+    } catch {
+      setBrowserAddressCopied(false);
+      setBrowserReceiveError('Copy failed. Select the address and copy it manually.');
+    }
+  };
   const [explorerHistory, setExplorerHistory] = useState<Array<{txid:string; blockindex:number; time:number; amount:string; received:string; sent:string}>>([]);
   const [explorerHistoryStatus, setExplorerHistoryStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   useEffect(() => { setExplorerPage(0); }, [bip39VaultAddress]);
@@ -497,12 +531,19 @@ function App() {
         </div>
         <div className="dashboard-address"><p className="muted">First derived test address · m/44'/666'/0'/0/0</p>
           <code className="receive-address">{bip39VaultAddress ?? 'Unavailable'}</code>
-          <button type="button" disabled={!bip39VaultAddress} onClick={() => {
-            if (bip39VaultAddress) void navigator.clipboard.writeText(bip39VaultAddress);
-          }}>Copy public address</button></div>
+          <button type="button" disabled={!bip39VaultAddress} onClick={() => void copyBrowserAddress()}>{browserAddressCopied ? '✓ Copied!' : 'Copy public address'}</button></div>
         <div className="dashboard-actions"><div><strong>↑ Send</strong><span>Disabled · No signing</span></div>
-          <div><strong>↓ Receive</strong><span>Test only · Do not fund</span></div>
+          <button type="button" onClick={() => setBrowserReceiveOpen(v => !v)} aria-expanded={browserReceiveOpen} aria-controls="browser-receive"><strong>↓ Receive</strong><span>Test only · Do not fund</span></button>
           <div><strong>◷ History</strong><span>{explorerHistoryStatus === 'ready' ? 'FloofyScan · read-only' : explorerHistoryStatus === 'loading' ? 'Loading…' : 'Unavailable'}</span></div></div>
+        {browserReceiveOpen && <div className="send-preview" id="browser-receive">
+          <h3>Receive FLOOF · Experimental browser wallet</h3>
+          <p className="setup-notice">⚠️ TEST ONLY — DO NOT FUND. Address derivation is experimental and not verified against FloofyChain Core. This QR code contains ONLY the public address, never your recovery phrase or private key.</p>
+          {browserReceiveQr ? <img src={browserReceiveQr} alt="QR code containing the experimental public FLOOF address" width={256} height={256} className="receive-qr" /> : !browserReceiveError ? <p>Generating QR code…</p> : null}
+          <p>Public test address:</p>
+          <code className="receive-address">{bip39VaultAddress}</code>
+          <p><button type="button" onClick={() => void copyBrowserAddress()}>{browserAddressCopied ? '✓ Copied!' : 'Copy address'}</button></p>
+          {browserReceiveError && <p role="alert">{browserReceiveError}</p>}
+        </div>}
         <div className="send-preview">
           <h3>Transaction history · FloofyScan</h3>
           {explorerHistoryStatus === 'loading' && <p>Loading public transactions…</p>}
