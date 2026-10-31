@@ -41,8 +41,8 @@ function App() {
     fetch('https://explorer.floofychain.com/api/v1/address/' + encodeURIComponent(bip39VaultAddress), { signal: controller.signal, cache: 'no-store' })
       .then(async response => { if (!response.ok) throw new Error('Explorer unavailable'); return response.json(); })
       .then(data => {
-        if (data.address !== bip39VaultAddress || !/^\\d+\\.\\d{8}$/.test(data.balance) ||
-            !/^\\d+\\.\\d{8}$/.test(data.received) || !/^\\d+\\.\\d{8}$/.test(data.sent) ||
+        if (data.address !== bip39VaultAddress || !/^\d+\.\d{8}$/.test(data.balance) ||
+            !/^\d+\.\d{8}$/.test(data.received) || !/^\d+\.\d{8}$/.test(data.sent) ||
             !Number.isSafeInteger(data.txcount) || data.txcount < 0) throw new Error('Invalid explorer response');
         if (!controller.signal.aborted) { setExplorerData({balance:data.balance,received:data.received,sent:data.sent,txcount:data.txcount}); setExplorerStatus('ready'); }
       })
