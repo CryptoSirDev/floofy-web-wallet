@@ -77,7 +77,7 @@ function explorerAddress(address) {
       response.on('end', () => {
         try {
           const data = JSON.parse(body);
-          const validAmount = value => typeof value === 'string' && /^\\d+\\.\\d{8}$/.test(value);
+          const validAmount = value => typeof value === 'string' && /^\d+\.\d{8}$/.test(value);
           if (data.address !== address || !validAmount(data.balance) || !validAmount(data.received) || !validAmount(data.sent) || !Number.isSafeInteger(data.txcount) || data.txcount < 0) throw new Error('Invalid explorer data');
           resolveResult({ source: 'floofyscan', address, balance: data.balance, received: data.received, sent: data.sent, txcount: data.txcount });
         } catch { reject(new Error('Invalid explorer response')); }
@@ -105,7 +105,7 @@ const server = http.createServer(async (req, res) => {
     res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
     res.writeHead(204); res.end(); return;
   }
-  const explorerMatch = /^\\/api\\/explorer\\/address\\/([A-Za-z0-9]{26,64})$/.exec(req.url || '');
+  const explorerMatch = /^\/api\/explorer\/address\/([A-Za-z0-9]{26,64})$/.exec(req.url || '');
   if (req.method !== 'GET' || (!explorerMatch && !['/api/health', '/api/wallet/summary', '/api/wallet/transactions', '/api/wallet/receive'].includes(req.url))) {
     res.writeHead(404); res.end(JSON.stringify({ error: 'Not found' })); return;
   }
