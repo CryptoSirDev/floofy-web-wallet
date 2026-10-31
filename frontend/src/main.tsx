@@ -38,7 +38,7 @@ function App() {
     const controller = new AbortController();
     setExplorerStatus('loading'); setExplorerData(null);
     const timeout = setTimeout(() => controller.abort(), 10000);
-    fetch('https://explorer.floofychain.com/api/v1/address/' + encodeURIComponent(bip39VaultAddress), { signal: controller.signal, cache: 'no-store' })
+    fetch(API + '/api/explorer/address/' + encodeURIComponent(bip39VaultAddress), { signal: controller.signal, cache: 'no-store' })
       .then(async response => { if (!response.ok) throw new Error('Explorer unavailable'); return response.json(); })
       .then(data => {
         if (data.address !== bip39VaultAddress || !/^\d+\.\d{8}$/.test(data.balance) ||
