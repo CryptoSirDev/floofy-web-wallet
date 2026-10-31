@@ -30,6 +30,27 @@ function App() {
   const [bip39VaultPresent, setBip39VaultPresent] = useState(() => hasBip39TestVault());
   const [bip39VaultAddress, setBip39VaultAddress] = useState<string | null>(() => { try { return bip39TestVaultAddress(); } catch { return null; } });
   const [bip39VaultUnlocked, setBip39VaultUnlocked] = useState(false);
+  const [explorerData, setExplorerData] = useState<{balance: string; received: string; sent: string; txcount: number} | null>(null);
+  const [explorerStatus, setExplorerStatus] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [explorerRefresh, setExplorerRefresh] = useState(0);
+  useEffect(() => {
+    if (!bip39VaultAddress) { setExplorerData(null); setExplorerStatus('error'); return; }
+    const controller = new AbortController();
+    setExplorerStatus('loading'); setExplorerData(null);
+    const timeout = setTimeout(() => controller.abort(), 10000);
+    fetch('https://explorer.floofychain.com/api/v1/address/' + encodeURIComponent(bip39VaultAddress), { signal: controller.signal, cache: 'no-store' })
+      .then(async response => { if (!response.ok) throw new Error('Explorer unavailable'); return response.json(); })
+      .then(data => {
+        if (data.address !== bip39VaultAddress || !/^\\d+\\.\\d{8}$/.test(data.balance) ||
+            !/^\\d+\\.\\d{8}$/.test(data.received) || !/^\\d+\\.\\d{8}$/.test(data.sent) ||
+            !Number.isSafeInteger(data.txcount) || data.txcount < 0) throw new Error('Invalid explorer response');
+        if (!controller.signal.aborted) { setExplorerData({balance:data.balance,received:data.received,sent:data.sent,txcount:data.txcount}); setExplorerStatus('ready'); }
+      })
+      .catch(() => { if (!controller.signal.aborted) { setExplorerData(null); setExplorerStatus('error'); } })
+      .finally(() => clearTimeout(timeout));
+    return () => { controller.abort(); clearTimeout(timeout); };
+  }, [bip39VaultAddress, explorerRefresh]);
+
   const [bip39Password, setBip39Password] = useState('');
   const [bip39PasswordConfirm, setBip39PasswordConfirm] = useState('');
   const [bip39VaultBusy, setBip39VaultBusy] = useState(false);
@@ -443,8 +464,13 @@ function App() {
           <h2>My Wallet</h2><p className="muted">Unlocked test wallet · 24-word BIP39</p></div>
           <button type="button" onClick={() => { setBip39VaultUnlocked(false); setBip39Password(''); setBip39VaultNotice('Wallet locked.'); setBip39SettingsOpen(false); setBip39RevealPassword(''); setBip39RevealedPhrase(''); setBip39RevealError(''); }}>Lock Wallet</button>
         </div>
-        <div className="dashboard-balance"><p className="muted">Browser wallet balance</p><h2>— FLOOF</h2>
-          <p>Unavailable · Address-based indexing not implemented</p></div>
+        <div className="dashboard-balance"><p className="muted">Browser wallet balance · FloofyScan</p>
+          <h2>{explorerStatus === 'ready' && explorerData ? explorerData.balance + ' FLOOF' : '— FLOOF'}</h2>
+          <p>{explorerStatus === 'loading' ? 'Checking public address…' : explorerStatus === 'error' ? 'Balance unavailable · Explorer could not be reached or returned invalid data' : 'Public address data · FloofyScan (not Core wallet)'}</p>
+          {explorerStatus === 'ready' && explorerData && <p>Received: {explorerData.received} · Sent: {explorerData.sent} · Transactions: {explorerData.txcount}</p>}
+          <button type="button" onClick={() => setExplorerRefresh(v => v + 1)}>Refresh explorer balance</button>
+          <p className="muted">Experimental wallet — never fund this address. Explorer information may lag behind the chain.</p>
+        </div>
         <div className="dashboard-address"><p className="muted">First derived test address · m/44'/666'/0'/0/0</p>
           <code className="receive-address">{bip39VaultAddress ?? 'Unavailable'}</code>
           <button type="button" disabled={!bip39VaultAddress} onClick={() => {
