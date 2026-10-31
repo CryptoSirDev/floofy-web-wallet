@@ -33,6 +33,30 @@ function App() {
   const [explorerData, setExplorerData] = useState<{balance: string; received: string; sent: string; txcount: number} | null>(null);
   const [explorerStatus, setExplorerStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [explorerRefresh, setExplorerRefresh] = useState(0);
+  const [explorerPage, setExplorerPage] = useState(0);
+  const [explorerHistory, setExplorerHistory] = useState<Array<{txid:string; blockindex:number; time:number; amount:string; received:string; sent:string}>>([]);
+  const [explorerHistoryStatus, setExplorerHistoryStatus] = useState<'loading' | 'ready' | 'error'>('loading');
+  useEffect(() => { setExplorerPage(0); }, [bip39VaultAddress]);
+  useEffect(() => {
+    if (!bip39VaultAddress) { setExplorerHistory([]); setExplorerHistoryStatus('error'); return; }
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000);
+    setExplorerHistoryStatus('loading'); setExplorerHistory([]);
+    fetch(API + '/api/explorer/address/' + encodeURIComponent(bip39VaultAddress) + '/txs?page=' + explorerPage, { signal: controller.signal, cache: 'no-store' })
+      .then(async response => { if (!response.ok) throw Error('History unavailable'); return response.json(); })
+      .then(data => {
+        if (data.address !== bip39VaultAddress || data.page !== explorerPage || data.limit !== 30 ||
+            !Array.isArray(data.transactions) || data.transactions.length > 30 ||
+            !data.transactions.every((tx: any) => /^[0-9a-fA-F]{64}$/.test(tx.txid) &&
+              Number.isSafeInteger(tx.blockindex) && Number.isSafeInteger(tx.time) &&
+              typeof tx.amount === 'string' && typeof tx.received === 'string' && typeof tx.sent === 'string')) throw Error('Invalid history');
+        if (!controller.signal.aborted) { setExplorerHistory(data.transactions); setExplorerHistoryStatus('ready'); }
+      })
+      .catch(() => { if (!controller.signal.aborted) { setExplorerHistory([]); setExplorerHistoryStatus('error'); } })
+      .finally(() => clearTimeout(timeout));
+    return () => { controller.abort(); clearTimeout(timeout); };
+  }, [bip39VaultAddress, explorerPage, explorerRefresh]);
+
   useEffect(() => {
     if (!bip39VaultAddress) { setExplorerData(null); setExplorerStatus('error'); return; }
     const controller = new AbortController();
@@ -478,7 +502,22 @@ function App() {
           }}>Copy public address</button></div>
         <div className="dashboard-actions"><div><strong>↑ Send</strong><span>Disabled · No signing</span></div>
           <div><strong>↓ Receive</strong><span>Test only · Do not fund</span></div>
-          <div><strong>◷ History</strong><span>Unavailable</span></div></div>
+          <div><strong>◷ History</strong><span>{explorerHistoryStatus === 'ready' ? 'FloofyScan · read-only' : explorerHistoryStatus === 'loading' ? 'Loading…' : 'Unavailable'}</span></div></div>
+        <div className="send-preview">
+          <h3>Transaction history · FloofyScan</h3>
+          {explorerHistoryStatus === 'loading' && <p>Loading public transactions…</p>}
+          {explorerHistoryStatus === 'error' && <p role="status">History unavailable. Check the local backend or try Refresh explorer balance.</p>}
+          {explorerHistoryStatus === 'ready' && explorerHistory.length === 0 && <p>No transactions on this page.</p>}
+          {explorerHistoryStatus === 'ready' && explorerHistory.map(tx => <div className="send-preview" key={tx.txid}>
+            <p><strong>{Number(tx.received) > 0 && Number(tx.sent) > 0 ? 'Mixed transaction' : Number(tx.received) > 0 ? '↓ Received' : Number(tx.sent) > 0 ? '↑ Sent' : 'Transaction'}</strong> · {tx.amount} FLOOF</p>
+            <p>Received: {tx.received} · Sent: {tx.sent}</p>
+            <p>{new Date(tx.time * 1000).toLocaleString('pt-PT')} · Block #{tx.blockindex}</p>
+            <p><a href={'https://explorer.floofychain.com/tx/' + tx.txid} target="_blank" rel="noopener noreferrer">View TXID: {tx.txid.slice(0, 16)}…</a></p>
+          </div>)}
+          <p>Page {explorerPage + 1} · up to 30 transactions per page</p>
+          <button type="button" disabled={explorerPage === 0 || explorerHistoryStatus === 'loading'} onClick={() => setExplorerPage(p => Math.max(0, p - 1))}>Previous</button>{' '}
+          <button type="button" disabled={explorerHistoryStatus !== 'ready' || explorerHistory.length < 30 || explorerPage >= 9999} onClick={() => setExplorerPage(p => p + 1)}>Next</button>
+        </div>
         <div className="send-preview">
           <h3>⚙️ Settings</h3>
           <button type="button" onClick={() => {
